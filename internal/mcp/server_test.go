@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/jessevaughan/increasex/internal/app"
 )
 
 func TestReadFrameAcceptsCanonicalContentLengthHeader(t *testing.T) {
@@ -172,5 +174,112 @@ func TestReadJSONLineFrameHandlesEOFWithoutTrailingNewline(t *testing.T) {
 	_, err = server.readFrame()
 	if err != io.EOF {
 		t.Fatalf("second readFrame() error = %v, want EOF", err)
+	}
+}
+
+func TestHandleWritePreviewsWhenConfirmationTokenIsMissing(t *testing.T) {
+	server := &Server{}
+	previewCalled := false
+	executeCalled := false
+
+	result, isErr := server.handleWrite(
+		t.Context(),
+		app.Session{},
+		nil,
+		false,
+		"",
+		func() (*app.PreviewResult, error) {
+			previewCalled = true
+			return &app.PreviewResult{Mode: "preview", Summary: "Preview only"}, nil
+		},
+		func() (any, string, error) {
+			executeCalled = true
+			return map[string]any{"mode": "executed"}, "req_123", nil
+		},
+	)
+
+	if isErr {
+		t.Fatalf("handleWrite() isErr = true, want false")
+	}
+	if !previewCalled {
+		t.Fatal("handleWrite() did not call preview when confirmation token was missing")
+	}
+	if executeCalled {
+		t.Fatal("handleWrite() executed despite missing confirmation token")
+	}
+	text := toJSONString(result)
+	if !strings.Contains(text, "\"mode\":\"preview\"") {
+		t.Fatalf("handleWrite() = %s, want preview payload", text)
+	}
+}
+
+func TestHandleWriteExecutesWithConfirmationToken(t *testing.T) {
+	server := &Server{}
+	previewCalled := false
+	executeCalled := false
+
+	result, isErr := server.handleWrite(
+		t.Context(),
+		app.Session{},
+		nil,
+		false,
+		"token_123",
+		func() (*app.PreviewResult, error) {
+			previewCalled = true
+			return &app.PreviewResult{Mode: "preview"}, nil
+		},
+		func() (any, string, error) {
+			executeCalled = true
+			return map[string]any{"mode": "executed"}, "req_123", nil
+		},
+	)
+
+	if isErr {
+		t.Fatalf("handleWrite() isErr = true, want false")
+	}
+	if previewCalled {
+		t.Fatal("handleWrite() previewed despite having dry_run=false and confirmation token")
+	}
+	if !executeCalled {
+		t.Fatal("handleWrite() did not execute when confirmation token was present")
+	}
+	text := toJSONString(result)
+	if !strings.Contains(text, "\"mode\":\"executed\"") {
+		t.Fatalf("handleWrite() = %s, want executed payload", text)
+	}
+}
+
+func TestToolsExposeNewParitySurface(t *testing.T) {
+	server := &Server{}
+	tools := server.tools()
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+	}
+	got := strings.Join(names, ",")
+
+	expected := []string{
+		"describe_capabilities",
+		"list_external_accounts",
+		"retrieve_external_account",
+		"create_external_account",
+		"update_external_account",
+		"list_transfers",
+		"retrieve_transfer",
+		"list_transfer_queue",
+		"approve_transfer",
+		"cancel_transfer",
+		"create_account_transfer",
+		"create_real_time_payments_transfer",
+		"create_card_details_iframe",
+		"update_card_pin",
+	}
+	for _, name := range expected {
+		if !strings.Contains(got, name) {
+			t.Fatalf("tools() missing %q in %q", name, got)
+		}
+	}
+	if !strings.HasPrefix(got, "describe_capabilities,") {
+		t.Fatalf("tools() should start with describe_capabilities, got %q", got)
 	}
 }

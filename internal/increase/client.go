@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	increase "github.com/increase/increase-go"
-	"github.com/increase/increase-go/option"
+	increase "github.com/Increase/increase-go"
+	"github.com/Increase/increase-go/option"
 	"github.com/jessevaughan/increasex/internal/config"
 	"github.com/jessevaughan/increasex/internal/util"
 )
@@ -190,9 +190,108 @@ func (c *Client) CreateCardRaw(ctx context.Context, body map[string]any, idempot
 	return APIResult[*increase.Card]{Data: &card, RequestID: requestIDFrom(resp)}, nil
 }
 
+func (c *Client) GetCardDetails(ctx context.Context, cardID string) (APIResult[*increase.CardDetails], error) {
+	var resp *http.Response
+	details, err := c.raw.Cards.Details(ctx, cardID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.CardDetails]{}, err
+	}
+	return APIResult[*increase.CardDetails]{Data: details, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CreateCardDetailsIframe(ctx context.Context, cardID string, params increase.CardNewDetailsIframeParams) (APIResult[*increase.CardIframeURL], error) {
+	var resp *http.Response
+	iframe, err := c.raw.Cards.NewDetailsIframe(ctx, cardID, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.CardIframeURL]{}, err
+	}
+	return APIResult[*increase.CardIframeURL]{Data: iframe, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) UpdateCardPIN(ctx context.Context, cardID string, params increase.CardUpdatePinParams) (APIResult[*increase.CardDetails], error) {
+	var resp *http.Response
+	details, err := c.raw.Cards.UpdatePin(ctx, cardID, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.CardDetails]{}, err
+	}
+	return APIResult[*increase.CardDetails]{Data: details, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListExternalAccounts(ctx context.Context, params increase.ExternalAccountListParams) (APIResult[[]increase.ExternalAccount], error) {
+	var resp *http.Response
+	page, err := c.raw.ExternalAccounts.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.ExternalAccount]{}, err
+	}
+	return APIResult[[]increase.ExternalAccount]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetExternalAccount(ctx context.Context, externalAccountID string) (APIResult[*increase.ExternalAccount], error) {
+	var resp *http.Response
+	account, err := c.raw.ExternalAccounts.Get(ctx, externalAccountID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.ExternalAccount]{}, err
+	}
+	return APIResult[*increase.ExternalAccount]{Data: account, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CreateExternalAccount(ctx context.Context, params increase.ExternalAccountNewParams, idempotencyKey string) (APIResult[*increase.ExternalAccount], error) {
+	var resp *http.Response
+	account, err := c.raw.ExternalAccounts.New(ctx, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.ExternalAccount]{}, err
+	}
+	return APIResult[*increase.ExternalAccount]{Data: account, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) UpdateExternalAccount(ctx context.Context, externalAccountID string, params increase.ExternalAccountUpdateParams, idempotencyKey string) (APIResult[*increase.ExternalAccount], error) {
+	var resp *http.Response
+	account, err := c.raw.ExternalAccounts.Update(ctx, externalAccountID, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.ExternalAccount]{}, err
+	}
+	return APIResult[*increase.ExternalAccount]{Data: account, RequestID: requestIDFrom(resp)}, nil
+}
+
 func (c *Client) CreateInternalTransfer(ctx context.Context, params increase.AccountTransferNewParams, idempotencyKey string) (APIResult[*increase.AccountTransfer], error) {
 	var resp *http.Response
 	transfer, err := c.raw.AccountTransfers.New(ctx, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.AccountTransfer]{}, err
+	}
+	return APIResult[*increase.AccountTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListInternalTransfers(ctx context.Context, params increase.AccountTransferListParams) (APIResult[[]increase.AccountTransfer], error) {
+	var resp *http.Response
+	page, err := c.raw.AccountTransfers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.AccountTransfer]{}, err
+	}
+	return APIResult[[]increase.AccountTransfer]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetInternalTransfer(ctx context.Context, transferID string) (APIResult[*increase.AccountTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.AccountTransfers.Get(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.AccountTransfer]{}, err
+	}
+	return APIResult[*increase.AccountTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ApproveInternalTransfer(ctx context.Context, transferID string) (APIResult[*increase.AccountTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.AccountTransfers.Approve(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.AccountTransfer]{}, err
+	}
+	return APIResult[*increase.AccountTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CancelInternalTransfer(ctx context.Context, transferID string) (APIResult[*increase.AccountTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.AccountTransfers.Cancel(ctx, transferID, c.requestOptions("", &resp)...)
 	if err != nil {
 		return APIResult[*increase.AccountTransfer]{}, err
 	}
@@ -208,9 +307,81 @@ func (c *Client) CreateACHTransfer(ctx context.Context, params increase.ACHTrans
 	return APIResult[*increase.ACHTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
 }
 
+func (c *Client) ListACHTransfers(ctx context.Context, params increase.ACHTransferListParams) (APIResult[[]increase.ACHTransfer], error) {
+	var resp *http.Response
+	page, err := c.raw.ACHTransfers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.ACHTransfer]{}, err
+	}
+	return APIResult[[]increase.ACHTransfer]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetACHTransfer(ctx context.Context, transferID string) (APIResult[*increase.ACHTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.ACHTransfers.Get(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.ACHTransfer]{}, err
+	}
+	return APIResult[*increase.ACHTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ApproveACHTransfer(ctx context.Context, transferID string) (APIResult[*increase.ACHTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.ACHTransfers.Approve(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.ACHTransfer]{}, err
+	}
+	return APIResult[*increase.ACHTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CancelACHTransfer(ctx context.Context, transferID string) (APIResult[*increase.ACHTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.ACHTransfers.Cancel(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.ACHTransfer]{}, err
+	}
+	return APIResult[*increase.ACHTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
 func (c *Client) CreateRTPTransfer(ctx context.Context, params increase.RealTimePaymentsTransferNewParams, idempotencyKey string) (APIResult[*increase.RealTimePaymentsTransfer], error) {
 	var resp *http.Response
 	transfer, err := c.raw.RealTimePaymentsTransfers.New(ctx, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.RealTimePaymentsTransfer]{}, err
+	}
+	return APIResult[*increase.RealTimePaymentsTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListRTPTransfers(ctx context.Context, params increase.RealTimePaymentsTransferListParams) (APIResult[[]increase.RealTimePaymentsTransfer], error) {
+	var resp *http.Response
+	page, err := c.raw.RealTimePaymentsTransfers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.RealTimePaymentsTransfer]{}, err
+	}
+	return APIResult[[]increase.RealTimePaymentsTransfer]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetRTPTransfer(ctx context.Context, transferID string) (APIResult[*increase.RealTimePaymentsTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.RealTimePaymentsTransfers.Get(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.RealTimePaymentsTransfer]{}, err
+	}
+	return APIResult[*increase.RealTimePaymentsTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ApproveRTPTransfer(ctx context.Context, transferID string) (APIResult[*increase.RealTimePaymentsTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.RealTimePaymentsTransfers.Approve(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.RealTimePaymentsTransfer]{}, err
+	}
+	return APIResult[*increase.RealTimePaymentsTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CancelRTPTransfer(ctx context.Context, transferID string) (APIResult[*increase.RealTimePaymentsTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.RealTimePaymentsTransfers.Cancel(ctx, transferID, c.requestOptions("", &resp)...)
 	if err != nil {
 		return APIResult[*increase.RealTimePaymentsTransfer]{}, err
 	}
@@ -226,13 +397,85 @@ func (c *Client) CreateWireTransfer(ctx context.Context, params increase.WireTra
 	return APIResult[*increase.WireTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
 }
 
-func (c *Client) CreateFedNowTransfer(ctx context.Context, params FedNowTransferNewParams, idempotencyKey string) (APIResult[*FedNowTransfer], error) {
+func (c *Client) ListWireTransfers(ctx context.Context, params increase.WireTransferListParams) (APIResult[[]increase.WireTransfer], error) {
 	var resp *http.Response
-	var transfer FedNowTransfer
-	if err := c.raw.Post(ctx, "fednow_transfers", params, &transfer, c.requestOptions(idempotencyKey, &resp)...); err != nil {
-		return APIResult[*FedNowTransfer]{}, err
+	page, err := c.raw.WireTransfers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.WireTransfer]{}, err
 	}
-	return APIResult[*FedNowTransfer]{Data: &transfer, RequestID: requestIDFrom(resp)}, nil
+	return APIResult[[]increase.WireTransfer]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetWireTransfer(ctx context.Context, transferID string) (APIResult[*increase.WireTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.WireTransfers.Get(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.WireTransfer]{}, err
+	}
+	return APIResult[*increase.WireTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ApproveWireTransfer(ctx context.Context, transferID string) (APIResult[*increase.WireTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.WireTransfers.Approve(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.WireTransfer]{}, err
+	}
+	return APIResult[*increase.WireTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CancelWireTransfer(ctx context.Context, transferID string) (APIResult[*increase.WireTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.WireTransfers.Cancel(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.WireTransfer]{}, err
+	}
+	return APIResult[*increase.WireTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CreateFedNowTransfer(ctx context.Context, params increase.FednowTransferNewParams, idempotencyKey string) (APIResult[*increase.FednowTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.FednowTransfers.New(ctx, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.FednowTransfer]{}, err
+	}
+	return APIResult[*increase.FednowTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListFedNowTransfers(ctx context.Context, params increase.FednowTransferListParams) (APIResult[[]increase.FednowTransfer], error) {
+	var resp *http.Response
+	page, err := c.raw.FednowTransfers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.FednowTransfer]{}, err
+	}
+	return APIResult[[]increase.FednowTransfer]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetFedNowTransfer(ctx context.Context, transferID string) (APIResult[*increase.FednowTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.FednowTransfers.Get(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.FednowTransfer]{}, err
+	}
+	return APIResult[*increase.FednowTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ApproveFedNowTransfer(ctx context.Context, transferID string) (APIResult[*increase.FednowTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.FednowTransfers.Approve(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.FednowTransfer]{}, err
+	}
+	return APIResult[*increase.FednowTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) CancelFedNowTransfer(ctx context.Context, transferID string) (APIResult[*increase.FednowTransfer], error) {
+	var resp *http.Response
+	transfer, err := c.raw.FednowTransfers.Cancel(ctx, transferID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.FednowTransfer]{}, err
+	}
+	return APIResult[*increase.FednowTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
 }
 
 func ParseSince(value string) (time.Time, error) {

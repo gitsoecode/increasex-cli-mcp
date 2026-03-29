@@ -14,10 +14,12 @@ The project is intentionally built so CLI commands and MCP tools use the same au
 This repository currently includes:
 
 - local auth and profile handling
-- human CLI commands for auth, accounts, balances, transactions, transfers, cards, and `mcp serve`
-- interactive selectors in TTY sessions for account-driven flows
+- human CLI commands for auth, accounts, balances, transactions, transfers, external accounts, cards, and `mcp serve`
+- TTY menus for `increasex` and `increasex transfer`
+- interactive selectors for account, card, external-account, and transfer-driven flows
 - preview-first write flows with confirmation tokens
-- a local MCP server with a curated tool surface for Codex and other MCP-capable hosts
+- transfer approval queue actions in both CLI and MCP
+- a local MCP server with a curated, grouped tool surface for Codex and other MCP-capable hosts
 
 What this is not:
 
@@ -51,6 +53,7 @@ Verify the CLI works:
 ```bash
 ./increasex accounts
 ./increasex balance --account-id account_xxx
+./increasex
 ```
 
 Register the MCP server with Codex:
@@ -95,8 +98,10 @@ If you stay in the repo directory, run the binary with:
 If you want to run `increasex` without `./`, place the binary somewhere on your `PATH`, for example:
 
 ```bash
-mv increasex /usr/local/bin/increasex
+sudo mv increasex /usr/local/bin/increasex
 ```
+
+On many macOS systems, writing to `/usr/local/bin` requires `sudo`.
 
 Or add this repo directory to your shell `PATH`.
 
@@ -239,10 +244,48 @@ List cards:
 ./increasex cards --account-id account_xxx
 ```
 
-Get masked card details:
+Retrieve masked card details:
 
 ```bash
-./increasex cards get --card-id card_xxx
+./increasex cards retrieve --card-id card_xxx
+```
+
+Retrieve card details:
+
+```bash
+./increasex cards details --card-id card_xxx
+```
+
+List external accounts:
+
+```bash
+./increasex external-accounts
+./increasex external-accounts --status active
+```
+
+Retrieve an external account:
+
+```bash
+./increasex external-accounts retrieve --external-account-id external_account_xxx
+```
+
+List transfers:
+
+```bash
+./increasex transfer list --rail account
+./increasex transfer list --rail ach --status pending_approval
+```
+
+Retrieve a transfer:
+
+```bash
+./increasex transfer retrieve --rail wire --transfer-id wire_transfer_xxx
+```
+
+List the approval queue:
+
+```bash
+./increasex transfer queue --rail ach
 ```
 
 ## Interactive CLI
@@ -252,17 +295,24 @@ When running in a TTY, `increasex` can use interactive selectors instead of requ
 Examples:
 
 ```bash
+./increasex
 ./increasex accounts
 ./increasex balance
 ./increasex transactions
+./increasex transfer
 ./increasex transfer internal
 ./increasex transfer external
+./increasex external-accounts
+./increasex cards
 ```
 
 Current interactive behavior includes:
 
+- root and transfer menus instead of no-subcommand dead ends
 - searchable account selection
 - searchable card selection
+- searchable external-account selection
+- transfer approval queue selection
 - action selection after listing accounts
 - confirmation selection before write execution
 
@@ -276,12 +326,14 @@ If you use `--json`, interactive UI is suppressed.
 
 ## Preview-First Writes
 
-All write commands still use a preview-first flow, but the human CLI now defaults to execution mode with confirmation:
+All write commands and MCP tools use a preview-first flow:
 
 - default CLI behavior: preview, confirm, then execute
 - `--dry-run` forces preview-only mode
 - preview returns a summary and `confirmation_token`
-- MCP write tools still default to `dry_run=true`
+- MCP omitted `dry_run` stays preview-first
+- MCP `dry_run=true` previews
+- MCP `dry_run=false` only executes when you also provide a valid `confirmation_token`
 - if you do not pass a token manually in the CLI, the CLI previews first and then prompts you before execution
 
 ### Create an Account
@@ -382,12 +434,12 @@ Preview only:
 
 ```bash
 ./increasex transfer external \
-  --rail rtp \
-  --creditor-name "Vendor LLC" \
-  --remittance-information "Invoice 1001" \
-  --source-account-number-id account_number_xxx \
-  --destination-account-number 123456789 \
-  --destination-routing-number 021000021 \
+  --rail real_time_payments \
+  --rtp-creditor-name "Vendor LLC" \
+  --rtp-remittance-information "Invoice 1001" \
+  --rtp-source-account-number-id account_number_xxx \
+  --rtp-destination-account-number 123456789 \
+  --rtp-destination-routing-number 021000021 \
   --rtp-amount-cents 5000 \
   --dry-run
 ```
@@ -450,6 +502,41 @@ Default execute flow with interactive confirmation:
 
 ```bash
 ./increasex cards create --account-id account_xxx --description "Ops card"
+```
+
+### Create an External Account
+
+Preview only:
+
+```bash
+./increasex external-accounts create \
+  --description "Primary vendor destination" \
+  --routing-number 021000021 \
+  --account-number 123456789 \
+  --dry-run
+```
+
+Default execute flow with interactive confirmation:
+
+```bash
+./increasex external-accounts create \
+  --description "Primary vendor destination" \
+  --routing-number 021000021 \
+  --account-number 123456789
+```
+
+### Approve a Transfer
+
+Preview only:
+
+```bash
+./increasex transfer approve --rail ach --transfer-id ach_transfer_xxx --dry-run
+```
+
+Default execute flow with interactive confirmation:
+
+```bash
+./increasex transfer approve --rail ach --transfer-id ach_transfer_xxx
 ```
 
 ## JSON Output
@@ -524,6 +611,10 @@ The agent does not receive your API key. `increasex` resolves auth locally from 
 
 ### MCP Tool Surface
 
+Discovery tool:
+
+- `describe_capabilities`
+
 Read tools:
 
 - `list_accounts`
@@ -532,24 +623,38 @@ Read tools:
 - `list_recent_transactions`
 - `list_cards`
 - `retrieve_card_details`
+- `retrieve_card_sensitive_details`
+- `create_card_details_iframe`
+- `list_external_accounts`
+- `retrieve_external_account`
+- `list_transfers`
+- `retrieve_transfer`
+- `list_transfer_queue`
 
 Write tools:
 
-- `move_money_internal`
 - `create_account`
 - `close_account`
 - `create_account_number`
-- `move_money_external_ach`
-- `move_money_external_rtp`
-- `move_money_external_fednow`
-- `move_money_external_wire`
+- `create_account_transfer`
+- `create_ach_transfer`
+- `create_real_time_payments_transfer`
+- `create_fednow_transfer`
+- `create_wire_transfer`
+- `approve_transfer`
+- `cancel_transfer`
+- `create_external_account`
+- `update_external_account`
 - `create_card`
+- `update_card_pin`
+
+Compatibility aliases still exist for the older `move_money_*` transfer tool names.
 
 ### MCP Write Pattern
 
-All MCP writes are two-step:
+All MCP writes are preview-first:
 
-1. Call the tool with default `dry_run=true`
+1. Call the tool without `dry_run`, or with `dry_run=true`
 2. Receive preview details and a `confirmation_token`
 3. Call the same tool again with `dry_run=false` and the same effective payload
 
@@ -623,4 +728,6 @@ GOCACHE=/tmp/increasex-gocache go build -o increasex ./cmd/increasex
 See also:
 
 - [docs/spec.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/spec.md)
+- [docs/parity_matrix.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/parity_matrix.md)
+- [docs/smoke_test_matrix.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/smoke_test_matrix.md)
 - [AGENTS.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/AGENTS.md)

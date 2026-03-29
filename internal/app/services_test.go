@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	increase "github.com/increase/increase-go"
+	increase "github.com/Increase/increase-go"
 )
 
 func TestNormalizeTransactionDirection(t *testing.T) {
@@ -79,5 +79,22 @@ func TestConfirmationPayloadExcludesControlFields(t *testing.T) {
 	}
 	if payload["description"] != "CLI test" {
 		t.Fatalf("confirmation_payload description = %v, want CLI test", payload["description"])
+	}
+}
+
+func TestPreviewUpdateCardPINMasksSensitiveValue(t *testing.T) {
+	services := NewServices()
+	preview, err := services.PreviewUpdateCardPIN(Session{ProfileName: "default", Environment: "sandbox"}, UpdateCardPINInput{
+		CardID: "card_123",
+		PIN:    "1234",
+	})
+	if err != nil {
+		t.Fatalf("PreviewUpdateCardPIN() error = %v", err)
+	}
+	if got := preview.Details["pin"]; got != "****" {
+		t.Fatalf("PreviewUpdateCardPIN() pin detail = %v, want masked value", got)
+	}
+	if preview.ConfirmationToken == "" {
+		t.Fatal("PreviewUpdateCardPIN() confirmation token = empty, want token")
 	}
 }

@@ -28,16 +28,41 @@ func newAccountsCmd(ctx *Context) *cobra.Command {
 				return err
 			}
 			printAccounts(accounts)
-			if isInteractiveRequested(ctx.Options) && len(accounts) > 0 {
-				accountID, err := chooseAccount(accounts, "Account actions")
+			if isInteractiveRequested(ctx.Options) {
+				options := []ui.Option{
+					{Label: "Inspect an account", Value: "inspect"},
+					{Label: "Create an account", Value: "create"},
+					{Label: "Back", Value: "back"},
+				}
+				if len(accounts) == 0 {
+					options = []ui.Option{
+						{Label: "Create an account", Value: "create"},
+						{Label: "Back", Value: "back"},
+					}
+				}
+				action, err := ui.PromptSelect("Accounts menu", options)
 				if err != nil {
 					return err
 				}
-				action, err := ui.PromptSelect("Choose action", []ui.Option{
+				switch action {
+				case "create":
+					return invokeCommand(cmd, newAccountsCreateCmd(ctx))
+				case "back":
+					return nil
+				}
+				if len(accounts) == 0 {
+					return nil
+				}
+				accountID, err := chooseAccount(accounts, "Select an account")
+				if err != nil {
+					return err
+				}
+				action, err = ui.PromptSelect("Choose action", []ui.Option{
 					{Label: "Get balance", Value: "balance"},
 					{Label: "Recent transactions", Value: "transactions"},
 					{Label: "Create account number", Value: "create_number"},
 					{Label: "Close account", Value: "close"},
+					{Label: "Back", Value: "back"},
 				})
 				if err != nil {
 					return err
@@ -80,6 +105,8 @@ func newAccountsCmd(ctx *Context) *cobra.Command {
 						return err
 					}
 					printPreview(preview)
+				case "back":
+					return nil
 				}
 			}
 			return nil

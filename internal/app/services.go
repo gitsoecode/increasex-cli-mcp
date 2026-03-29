@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	increase "github.com/increase/increase-go"
+	increase "github.com/Increase/increase-go"
 	"github.com/jessevaughan/increasex/internal/auth"
 	increasex "github.com/jessevaughan/increasex/internal/increase"
 	"github.com/jessevaughan/increasex/internal/util"
@@ -74,7 +74,9 @@ func (s Services) WhoAmI(ctx context.Context, api *increasex.Client, session Ses
 func (s Services) ListAccounts(ctx context.Context, api *increasex.Client, status string, limit int64, cursor string) ([]AccountSummary, string, error) {
 	params := increase.AccountListParams{}
 	if status != "" {
-		params.Status = increase.F(increase.AccountListParamsStatus(status))
+		params.Status = increase.F(increase.AccountListParamsStatus{
+			In: increase.F([]increase.AccountListParamsStatusIn{increase.AccountListParamsStatusIn(status)}),
+		})
 	}
 	if limit > 0 {
 		params.Limit = increase.Int(limit)
@@ -595,19 +597,19 @@ func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client,
 		return nil, "", err
 	}
 	params := increase.RealTimePaymentsTransferNewParams{
-		Amount:                increase.Int(input.AmountCents),
-		CreditorName:          increase.String(input.CreditorName),
-		RemittanceInformation: increase.String(input.RemittanceInformation),
-		SourceAccountNumberID: increase.String(input.SourceAccountNumberID),
+		Amount:                            increase.Int(input.AmountCents),
+		CreditorName:                      increase.String(input.CreditorName),
+		UnstructuredRemittanceInformation: increase.String(input.RemittanceInformation),
+		SourceAccountNumberID:             increase.String(input.SourceAccountNumberID),
 	}
 	if input.DebtorName != "" {
 		params.DebtorName = increase.String(input.DebtorName)
 	}
 	if input.DestinationAccountNumber != "" {
-		params.DestinationAccountNumber = increase.String(input.DestinationAccountNumber)
+		params.AccountNumber = increase.String(input.DestinationAccountNumber)
 	}
 	if input.DestinationRoutingNumber != "" {
-		params.DestinationRoutingNumber = increase.String(input.DestinationRoutingNumber)
+		params.RoutingNumber = increase.String(input.DestinationRoutingNumber)
 	}
 	if input.ExternalAccountID != "" {
 		params.ExternalAccountID = increase.String(input.ExternalAccountID)
@@ -655,37 +657,34 @@ func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Clie
 	if input.ExternalAccountID == "" && (input.AccountNumber == "" || input.RoutingNumber == "") {
 		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
 	}
-	params := increasex.FedNowTransferNewParams{
-		AccountID:                         input.AccountID,
-		AccountNumber:                     input.AccountNumber,
-		Amount:                            input.AmountCents,
-		CreditorName:                      input.CreditorName,
-		DebtorName:                        input.DebtorName,
-		ExternalAccountID:                 input.ExternalAccountID,
-		RoutingNumber:                     input.RoutingNumber,
-		SourceAccountNumberID:             input.SourceAccountNumberID,
-		UnstructuredRemittanceInformation: input.UnstructuredRemittanceInformation,
+	params := increase.FednowTransferNewParams{
+		AccountNumber:                     increase.String(input.AccountNumber),
+		Amount:                            increase.Int(input.AmountCents),
+		CreditorName:                      increase.String(input.CreditorName),
+		DebtorName:                        increase.String(input.DebtorName),
+		ExternalAccountID:                 increase.String(input.ExternalAccountID),
+		RoutingNumber:                     increase.String(input.RoutingNumber),
+		SourceAccountNumberID:             increase.String(input.SourceAccountNumberID),
+		UnstructuredRemittanceInformation: increase.String(input.UnstructuredRemittanceInformation),
 	}
 	if input.CreditorAddress != nil {
-		params.CreditorAddress = &increasex.FedNowAddress{
-			Line1:      input.CreditorAddress.Line1,
-			Line2:      input.CreditorAddress.Line2,
-			City:       input.CreditorAddress.City,
-			State:      input.CreditorAddress.State,
-			PostalCode: input.CreditorAddress.PostalCode,
-		}
+		params.CreditorAddress = increase.F(increase.FednowTransferNewParamsCreditorAddress{
+			Line1:      increase.String(input.CreditorAddress.Line1),
+			City:       increase.String(input.CreditorAddress.City),
+			State:      increase.String(input.CreditorAddress.State),
+			PostalCode: increase.String(input.CreditorAddress.PostalCode),
+		})
 	}
 	if input.DebtorAddress != nil {
-		params.DebtorAddress = &increasex.FedNowAddress{
-			Line1:      input.DebtorAddress.Line1,
-			Line2:      input.DebtorAddress.Line2,
-			City:       input.DebtorAddress.City,
-			State:      input.DebtorAddress.State,
-			PostalCode: input.DebtorAddress.PostalCode,
-		}
+		params.DebtorAddress = increase.F(increase.FednowTransferNewParamsDebtorAddress{
+			Line1:      increase.String(input.DebtorAddress.Line1),
+			City:       increase.String(input.DebtorAddress.City),
+			State:      increase.String(input.DebtorAddress.State),
+			PostalCode: increase.String(input.DebtorAddress.PostalCode),
+		})
 	}
 	if input.RequireApproval != nil {
-		params.RequireApproval = input.RequireApproval
+		params.RequireApproval = increase.Bool(*input.RequireApproval)
 	}
 	result, err := api.CreateFedNowTransfer(ctx, params, input.IdempotencyKey)
 	if err != nil {
@@ -722,10 +721,17 @@ func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client
 		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
 	}
 	params := increase.WireTransferNewParams{
-		AccountID:          increase.String(input.AccountID),
-		Amount:             increase.Int(input.AmountCents),
-		BeneficiaryName:    increase.String(input.BeneficiaryName),
-		MessageToRecipient: increase.String(input.MessageToRecipient),
+		AccountID: increase.String(input.AccountID),
+		Amount:    increase.Int(input.AmountCents),
+		Creditor: increase.F(increase.WireTransferNewParamsCreditor{
+			Name: increase.String(input.BeneficiaryName),
+		}),
+		Remittance: increase.F(increase.WireTransferNewParamsRemittance{
+			Category: increase.F(increase.WireTransferNewParamsRemittanceCategoryUnstructured),
+			Unstructured: increase.F(increase.WireTransferNewParamsRemittanceUnstructured{
+				Message: increase.String(input.MessageToRecipient),
+			}),
+		}),
 	}
 	if input.AccountNumber != "" {
 		params.AccountNumber = increase.String(input.AccountNumber)
@@ -737,25 +743,28 @@ func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client
 		params.ExternalAccountID = increase.String(input.ExternalAccountID)
 	}
 	if input.BeneficiaryAddressLine1 != "" {
-		params.BeneficiaryAddressLine1 = increase.String(input.BeneficiaryAddressLine1)
-	}
-	if input.BeneficiaryAddressLine2 != "" {
-		params.BeneficiaryAddressLine2 = increase.String(input.BeneficiaryAddressLine2)
-	}
-	if input.BeneficiaryAddressLine3 != "" {
-		params.BeneficiaryAddressLine3 = increase.String(input.BeneficiaryAddressLine3)
+		params.Creditor = increase.F(increase.WireTransferNewParamsCreditor{
+			Name: increase.String(input.BeneficiaryName),
+			Address: increase.F(increase.WireTransferNewParamsCreditorAddress{
+				Unstructured: increase.F(increase.WireTransferNewParamsCreditorAddressUnstructured{
+					Line1: increase.String(input.BeneficiaryAddressLine1),
+					Line2: increase.String(input.BeneficiaryAddressLine2),
+					Line3: increase.String(input.BeneficiaryAddressLine3),
+				}),
+			}),
+		})
 	}
 	if input.OriginatorName != "" {
-		params.OriginatorName = increase.String(input.OriginatorName)
-	}
-	if input.OriginatorAddressLine1 != "" {
-		params.OriginatorAddressLine1 = increase.String(input.OriginatorAddressLine1)
-	}
-	if input.OriginatorAddressLine2 != "" {
-		params.OriginatorAddressLine2 = increase.String(input.OriginatorAddressLine2)
-	}
-	if input.OriginatorAddressLine3 != "" {
-		params.OriginatorAddressLine3 = increase.String(input.OriginatorAddressLine3)
+		params.Debtor = increase.F(increase.WireTransferNewParamsDebtor{
+			Name: increase.String(input.OriginatorName),
+			Address: increase.F(increase.WireTransferNewParamsDebtorAddress{
+				Unstructured: increase.F(increase.WireTransferNewParamsDebtorAddressUnstructured{
+					Line1: increase.String(input.OriginatorAddressLine1),
+					Line2: increase.String(input.OriginatorAddressLine2),
+					Line3: increase.String(input.OriginatorAddressLine3),
+				}),
+			}),
+		})
 	}
 	if input.RequireApproval != nil {
 		params.RequireApproval = increase.Bool(*input.RequireApproval)
