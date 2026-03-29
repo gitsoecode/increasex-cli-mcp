@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jessevaughan/increasex/internal/app"
-	increasex "github.com/jessevaughan/increasex/internal/increase"
-	"github.com/jessevaughan/increasex/internal/ui"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/app"
+	increasex "github.com/gitsoecode/increasex-cli-mcp/internal/increase"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +35,7 @@ func newTransferCmd(ctx *Context) *cobra.Command {
 
 func runTransferMenu(cmd *cobra.Command, ctx *Context) error {
 	for {
-		choice, err := ui.PromptSelect("Transfers", []ui.Option{
+		choice, err := promptSelectNavigation("Transfers", []ui.Option{
 			{Label: "Create an account transfer", Value: "internal", Description: "Move funds between Increase accounts"},
 			{Label: "Create an external transfer", Value: "external", Description: "Send ACH, Real-Time Payments, FedNow, or wire"},
 			{Label: "List transfers", Value: "list", Description: "Review recent transfers by rail"},
@@ -43,39 +43,58 @@ func runTransferMenu(cmd *cobra.Command, ctx *Context) error {
 			{Label: "View approval queue", Value: "queue", Description: "List pending approval transfers"},
 			{Label: "Approve a transfer", Value: "approve", Description: "Approve a pending transfer"},
 			{Label: "Cancel a transfer", Value: "cancel", Description: "Cancel a transfer"},
-			{Label: "Back", Value: "back", Description: "Return to the previous menu"},
-			{Label: "Exit", Value: "exit", Description: "Return to the shell"},
-		})
+		}, navBack, navExit)
 		if err != nil {
 			return err
 		}
 		switch choice {
 		case "internal":
 			if err := invokeCommand(cmd, newTransferInternalCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "external":
 			if err := invokeCommand(cmd, newTransferExternalCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "list":
 			if err := invokeCommand(cmd, newTransferListCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "retrieve":
 			if err := invokeCommand(cmd, newTransferRetrieveCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "queue":
 			if err := invokeCommand(cmd, newTransferQueueCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "approve":
 			if err := invokeCommand(cmd, newTransferApproveCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "cancel":
 			if err := invokeCommand(cmd, newTransferCancelCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
 				return err
 			}
 		case "back", "exit":
@@ -98,7 +117,7 @@ func newTransferInternalCmd(ctx *Context) *cobra.Command {
 			}
 			if isInteractiveRequested(ctx.Options) {
 				if err := promptInternalTransferInput(cmd, ctx, api, &input); err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			input.DryRun = &dryRun
@@ -120,9 +139,9 @@ func newTransferInternalCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Execute this account transfer?")
+					confirmed, err := promptConfirmationNavigation(transferConfirmationPrompt("account", input.RequireApproval))
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -176,7 +195,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 			if rail == "" && isInteractiveRequested(ctx.Options) {
 				rail, err = promptExternalRail()
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			rail = normalizeTransferRail(rail)
@@ -184,7 +203,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 			case "ach":
 				if isInteractiveRequested(ctx.Options) {
 					if err := promptACHTransferInput(cmd, ctx, api, &achInput); err != nil {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				achInput.DryRun = &dryRun
@@ -192,7 +211,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 			case "real_time_payments":
 				if isInteractiveRequested(ctx.Options) {
 					if err := promptRTPTransferInput(cmd, ctx, api, &rtpInput); err != nil {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				rtpInput.DryRun = &dryRun
@@ -200,7 +219,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 			case "fednow":
 				if isInteractiveRequested(ctx.Options) {
 					if err := promptFedNowTransferInput(cmd, ctx, api, &fednowInput); err != nil {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				fednowInput.DryRun = &dryRun
@@ -208,7 +227,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 			case "wire":
 				if isInteractiveRequested(ctx.Options) {
 					if err := promptWireTransferInput(cmd, ctx, api, &wireInput); err != nil {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				wireInput.DryRun = &dryRun
@@ -262,6 +281,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 	cmd.Flags().Int64Var(&wireInput.AmountCents, "wire-amount-cents", 0, "wire amount in minor units")
 	cmd.Flags().StringVar(&wireInput.BeneficiaryName, "wire-beneficiary-name", "", "beneficiary name")
 	cmd.Flags().StringVar(&wireInput.MessageToRecipient, "wire-message-to-recipient", "", "message to recipient")
+	cmd.Flags().StringVar(&wireInput.SourceAccountNumberID, "wire-source-account-number-id", "", "source account number id")
 	cmd.Flags().StringVar(&wireInput.AccountNumber, "wire-account-number", "", "destination account number")
 	cmd.Flags().StringVar(&wireInput.RoutingNumber, "wire-routing-number", "", "routing number")
 	cmd.Flags().StringVar(&wireInput.ExternalAccountID, "wire-external-account-id", "", "external account id")
@@ -316,7 +336,7 @@ func newTransferListCmd(ctx *Context) *cobra.Command {
 			if input.Rail == "" && isInteractiveRequested(ctx.Options) {
 				input.Rail, err = promptRail("Transfer rail")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			input.Rail = normalizeTransferRail(input.Rail)
@@ -331,18 +351,17 @@ func newTransferListCmd(ctx *Context) *cobra.Command {
 			if !isInteractiveRequested(ctx.Options) || len(items) == 0 {
 				return nil
 			}
-			action, err := ui.PromptSelect("Transfer actions", []ui.Option{
+			action, err := promptSelectNavigation("Transfer actions", []ui.Option{
 				{Label: "Retrieve a transfer", Value: "retrieve"},
 				{Label: "Approve a pending transfer", Value: "approve"},
 				{Label: "Cancel a transfer", Value: "cancel"},
-				{Label: "Back", Value: "back"},
-			})
+			}, navBack, navExit)
 			if err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			selected, err := chooseTransfer(items, "Select a transfer")
 			if err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			transfer, ok := findTransferSummary(items, selected)
 			if !ok {
@@ -384,7 +403,7 @@ func newTransferRetrieveCmd(ctx *Context) *cobra.Command {
 			if rail == "" && isInteractiveRequested(ctx.Options) {
 				rail, err = promptRail("Transfer rail")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			rail = normalizeTransferRail(rail)
@@ -398,7 +417,7 @@ func newTransferRetrieveCmd(ctx *Context) *cobra.Command {
 				}
 				transferID, err = chooseTransfer(items, "Select a transfer")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			result, requestID, err := ctx.Services.RetrieveTransfer(cmd.Context(), api, rail, transferID)
@@ -431,7 +450,7 @@ func newTransferQueueCmd(ctx *Context) *cobra.Command {
 			if rail == "" && isInteractiveRequested(ctx.Options) {
 				rail, err = promptRail("Transfer rail")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			rail = normalizeTransferRail(rail)
@@ -446,17 +465,16 @@ func newTransferQueueCmd(ctx *Context) *cobra.Command {
 			if !isInteractiveRequested(ctx.Options) || len(items) == 0 {
 				return nil
 			}
-			action, err := ui.PromptSelect("Queue actions", []ui.Option{
+			action, err := promptSelectNavigation("Queue actions", []ui.Option{
 				{Label: "Approve a transfer", Value: "approve"},
 				{Label: "Cancel a transfer", Value: "cancel"},
-				{Label: "Back", Value: "back"},
-			})
+			}, navBack, navExit)
 			if err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			selected, err := chooseTransfer(items, "Select a transfer")
 			if err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			if action == "approve" {
 				return invokeCommand(cmd, newTransferApproveCmd(ctx), "--rail", rail, "--transfer-id", selected)
@@ -484,7 +502,7 @@ func newTransferApproveCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if err := promptTransferAction(cmd, ctx, api, &input, true); err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			input.DryRun = &dryRun
 			if dryRun {
@@ -505,9 +523,9 @@ func newTransferApproveCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Approve this transfer?")
+					confirmed, err := promptConfirmationNavigation("Approve this transfer?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -541,7 +559,7 @@ func newTransferCancelCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if err := promptTransferAction(cmd, ctx, api, &input, false); err != nil {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 			input.DryRun = &dryRun
 			if dryRun {
@@ -562,9 +580,9 @@ func newTransferCancelCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Cancel this transfer?")
+					confirmed, err := promptConfirmationNavigation("Cancel this transfer?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -591,36 +609,73 @@ func promptInternalTransferInput(cmd *cobra.Command, ctx *Context, api *increase
 	if err != nil {
 		return err
 	}
-	if input.FromAccountID == "" {
-		input.FromAccountID, err = chooseAccount(accounts, "Select source account")
-		if err != nil {
-			return err
+	step := 0
+	for step < 6 {
+		switch step {
+		case 0:
+			if input.FromAccountID != "" {
+				step++
+				continue
+			}
+			input.FromAccountID, err = chooseAccount(accounts, "Select source account")
+			if err != nil {
+				return err
+			}
+		case 1:
+			if input.ToAccountID != "" {
+				step++
+				continue
+			}
+			input.ToAccountID, err = chooseAccount(accounts, "Select destination account")
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 2:
+			if input.AmountCents != 0 {
+				step++
+				continue
+			}
+			input.AmountCents, err = promptInt64("Amount in cents", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 3:
+			if input.Description != "" {
+				step++
+				continue
+			}
+			input.Description, err = promptStringNavigation("Description (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 4:
+			if input.RequireApproval != nil {
+				step++
+				continue
+			}
+			requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer now")
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.RequireApproval = boolPtr(requireApproval)
 		}
-	}
-	if input.ToAccountID == "" {
-		input.ToAccountID, err = chooseAccount(accounts, "Select destination account")
-		if err != nil {
-			return err
-		}
-	}
-	if input.AmountCents == 0 {
-		input.AmountCents, err = promptInt64("Amount in cents", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.Description == "" {
-		input.Description, err = ui.PromptString("Description (optional)", false)
-		if err != nil {
-			return err
-		}
-	}
-	if input.RequireApproval == nil {
-		requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer without approval")
-		if err != nil {
-			return err
-		}
-		input.RequireApproval = boolPtr(requireApproval)
+		step++
 	}
 	return nil
 }
@@ -630,104 +685,213 @@ func promptACHTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.Cli
 	if err != nil {
 		return err
 	}
-	if input.AccountID == "" {
-		input.AccountID, err = chooseAccount(accounts, "Select source account")
-		if err != nil {
-			return err
-		}
+	step := 0
+	payeeType := ""
+	if input.IndividualName != "" {
+		payeeType = "individual"
+	} else if input.CompanyName != "" {
+		payeeType = "company"
 	}
-	if input.AmountCents == 0 {
-		input.AmountCents, err = promptInt64("Amount in cents", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.StatementDescriptor == "" {
-		input.StatementDescriptor, err = ui.PromptString("Statement descriptor", true)
-		if err != nil {
-			return err
-		}
-	}
-	if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
-		return err
-	}
-	if input.IndividualName == "" && input.CompanyName == "" {
-		payeeType, err := ui.PromptSelect("Recipient type", []ui.Option{
-			{Label: "Individual", Value: "individual"},
-			{Label: "Company", Value: "company"},
-			{Label: "Skip", Value: "skip"},
-		})
-		if err != nil {
-			return err
-		}
-		switch payeeType {
-		case "individual":
-			input.IndividualName, err = ui.PromptString("Individual name", true)
+	for step < 6 {
+		switch step {
+		case 0:
+			if input.AccountID != "" {
+				step++
+				continue
+			}
+			input.AccountID, err = chooseAccount(accounts, "Select source account")
 			if err != nil {
 				return err
 			}
-		case "company":
-			input.CompanyName, err = ui.PromptString("Company name", true)
+		case 1:
+			if input.AmountCents != 0 {
+				step++
+				continue
+			}
+			input.AmountCents, err = promptInt64("Amount in cents", true)
 			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
 				return err
 			}
+		case 2:
+			if input.StatementDescriptor != "" {
+				step++
+				continue
+			}
+			input.StatementDescriptor, err = promptStringNavigation("Statement descriptor", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 3:
+			if strings.TrimSpace(input.ExternalAccountID) != "" || (strings.TrimSpace(input.AccountNumber) != "" && strings.TrimSpace(input.RoutingNumber) != "") {
+				step++
+				continue
+			}
+			if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 4:
+			if payeeType == "" && input.IndividualName == "" && input.CompanyName == "" {
+				payeeType, err = promptSelectNavigation("Recipient type", []ui.Option{
+					{Label: "Individual", Value: "individual"},
+					{Label: "Company", Value: "company"},
+					{Label: "Skip", Value: "skip"},
+				}, navBack, navExit)
+				if err != nil {
+					if isNavigateBack(err) {
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+			switch payeeType {
+			case "individual":
+				if input.IndividualName != "" {
+					break
+				}
+				input.IndividualName, err = promptStringNavigation("Individual name", true)
+				if err != nil {
+					if isNavigateBack(err) {
+						payeeType = ""
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			case "company":
+				if input.CompanyName != "" {
+					break
+				}
+				input.CompanyName, err = promptStringNavigation("Company name", true)
+				if err != nil {
+					if isNavigateBack(err) {
+						payeeType = ""
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+		case 5:
+			if input.RequireApproval != nil {
+				step++
+				continue
+			}
+			requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer now")
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.RequireApproval = boolPtr(requireApproval)
 		}
-	}
-	if input.RequireApproval == nil {
-		requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer without approval")
-		if err != nil {
-			return err
-		}
-		input.RequireApproval = boolPtr(requireApproval)
+		step++
 	}
 	return nil
 }
 
 func promptRTPTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.Client, input *app.RTPTransferInput) error {
-	if input.AmountCents == 0 {
-		value, err := promptInt64("Amount in cents", true)
-		if err != nil {
-			return err
+	step := 0
+	var err error
+	for step < 6 {
+		switch step {
+		case 0:
+			if input.AmountCents != 0 {
+				step++
+				continue
+			}
+			input.AmountCents, err = promptInt64("Amount in cents", true)
+			if err != nil {
+				return err
+			}
+		case 1:
+			if input.CreditorName != "" {
+				step++
+				continue
+			}
+			input.CreditorName, err = promptStringNavigation("Creditor name", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 2:
+			if input.SourceAccountNumberID != "" {
+				step++
+				continue
+			}
+			input.SourceAccountNumberID, err = promptSourceAccountNumberSelection(cmd, ctx, api, "", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 3:
+			if input.RemittanceInformation != "" {
+				step++
+				continue
+			}
+			input.RemittanceInformation, err = promptStringNavigation("Remittance information (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 4:
+			if input.DebtorName != "" {
+				step++
+				continue
+			}
+			input.DebtorName, err = promptStringNavigation("Debtor name (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 5:
+			if strings.TrimSpace(input.ExternalAccountID) == "" && (strings.TrimSpace(input.DestinationAccountNumber) == "" || strings.TrimSpace(input.DestinationRoutingNumber) == "") {
+				if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.DestinationAccountNumber, &input.DestinationRoutingNumber); err != nil {
+					if isNavigateBack(err) {
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+			if input.RequireApproval == nil {
+				requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer now")
+				if err != nil {
+					if isNavigateBack(err) {
+						continue
+					}
+					return err
+				}
+				input.RequireApproval = boolPtr(requireApproval)
+			}
 		}
-		input.AmountCents = value
-	}
-	if input.CreditorName == "" {
-		value, err := ui.PromptString("Creditor name", true)
-		if err != nil {
-			return err
-		}
-		input.CreditorName = value
-	}
-	if input.SourceAccountNumberID == "" {
-		value, err := ui.PromptString("Source account number id", true)
-		if err != nil {
-			return err
-		}
-		input.SourceAccountNumberID = value
-	}
-	if input.RemittanceInformation == "" {
-		value, err := ui.PromptString("Remittance information (optional)", false)
-		if err != nil {
-			return err
-		}
-		input.RemittanceInformation = value
-	}
-	if input.DebtorName == "" {
-		value, err := ui.PromptString("Debtor name (optional)", false)
-		if err != nil {
-			return err
-		}
-		input.DebtorName = value
-	}
-	if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.DestinationAccountNumber, &input.DestinationRoutingNumber); err != nil {
-		return err
-	}
-	if input.RequireApproval == nil {
-		requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer without approval")
-		if err != nil {
-			return err
-		}
-		input.RequireApproval = boolPtr(requireApproval)
+		step++
 	}
 	return nil
 }
@@ -737,51 +901,105 @@ func promptFedNowTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.
 	if err != nil {
 		return err
 	}
-	if input.AccountID == "" {
-		input.AccountID, err = chooseAccount(accounts, "Select source account")
-		if err != nil {
-			return err
+	step := 0
+	for step < 7 {
+		switch step {
+		case 0:
+			if input.AccountID != "" {
+				step++
+				continue
+			}
+			input.AccountID, err = chooseAccount(accounts, "Select source account")
+			if err != nil {
+				return err
+			}
+		case 1:
+			if input.AmountCents != 0 {
+				step++
+				continue
+			}
+			input.AmountCents, err = promptInt64("Amount in cents", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 2:
+			if input.CreditorName != "" {
+				step++
+				continue
+			}
+			input.CreditorName, err = promptStringNavigation("Creditor name", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 3:
+			if input.DebtorName != "" {
+				step++
+				continue
+			}
+			input.DebtorName, err = promptStringNavigation("Debtor name", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 4:
+			if input.SourceAccountNumberID != "" {
+				step++
+				continue
+			}
+			input.SourceAccountNumberID, err = promptSourceAccountNumberSelection(cmd, ctx, api, input.AccountID, true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 5:
+			if input.UnstructuredRemittanceInformation != "" {
+				step++
+				continue
+			}
+			input.UnstructuredRemittanceInformation, err = promptStringNavigation("Unstructured remittance information (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 6:
+			if strings.TrimSpace(input.ExternalAccountID) == "" && (strings.TrimSpace(input.AccountNumber) == "" || strings.TrimSpace(input.RoutingNumber) == "") {
+				if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
+					if isNavigateBack(err) {
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+			if input.RequireApproval == nil {
+				requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer now")
+				if err != nil {
+					if isNavigateBack(err) {
+						continue
+					}
+					return err
+				}
+				input.RequireApproval = boolPtr(requireApproval)
+			}
 		}
-	}
-	if input.AmountCents == 0 {
-		input.AmountCents, err = promptInt64("Amount in cents", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.CreditorName == "" {
-		input.CreditorName, err = ui.PromptString("Creditor name", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.DebtorName == "" {
-		input.DebtorName, err = ui.PromptString("Debtor name", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.SourceAccountNumberID == "" {
-		input.SourceAccountNumberID, err = ui.PromptString("Source account number id", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.UnstructuredRemittanceInformation == "" {
-		input.UnstructuredRemittanceInformation, err = ui.PromptString("Unstructured remittance information (optional)", false)
-		if err != nil {
-			return err
-		}
-	}
-	if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
-		return err
-	}
-	if input.RequireApproval == nil {
-		requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer without approval")
-		if err != nil {
-			return err
-		}
-		input.RequireApproval = boolPtr(requireApproval)
+		step++
 	}
 	return nil
 }
@@ -791,80 +1009,223 @@ func promptWireTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.Cl
 	if err != nil {
 		return err
 	}
-	if input.AccountID == "" {
-		input.AccountID, err = chooseAccount(accounts, "Select source account")
-		if err != nil {
-			return err
+	step := 0
+	for step < 5 {
+		switch step {
+		case 0:
+			if input.AccountID != "" {
+				step++
+				continue
+			}
+			input.AccountID, err = chooseAccount(accounts, "Select source account")
+			if err != nil {
+				return err
+			}
+		case 1:
+			if input.AmountCents != 0 {
+				step++
+				continue
+			}
+			input.AmountCents, err = promptInt64("Amount in cents", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 2:
+			if input.BeneficiaryName != "" {
+				step++
+				continue
+			}
+			input.BeneficiaryName, err = promptStringNavigation("Beneficiary name", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 3:
+			if input.MessageToRecipient != "" {
+				step++
+				continue
+			}
+			input.MessageToRecipient, err = promptStringNavigation("Message to recipient (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+		case 4:
+			if input.SourceAccountNumberID == "" {
+				input.SourceAccountNumberID, err = promptSourceAccountNumberSelection(cmd, ctx, api, input.AccountID, false)
+				if err != nil {
+					if isNavigateBack(err) {
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+		case 5:
+			if strings.TrimSpace(input.ExternalAccountID) == "" && (strings.TrimSpace(input.AccountNumber) == "" || strings.TrimSpace(input.RoutingNumber) == "") {
+				if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
+					if isNavigateBack(err) {
+						step = max(0, step-1)
+						continue
+					}
+					return err
+				}
+			}
+			if input.RequireApproval == nil {
+				requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer now")
+				if err != nil {
+					if isNavigateBack(err) {
+						continue
+					}
+					return err
+				}
+				input.RequireApproval = boolPtr(requireApproval)
+			}
 		}
-	}
-	if input.AmountCents == 0 {
-		input.AmountCents, err = promptInt64("Amount in cents", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.BeneficiaryName == "" {
-		input.BeneficiaryName, err = ui.PromptString("Beneficiary name", true)
-		if err != nil {
-			return err
-		}
-	}
-	if input.MessageToRecipient == "" {
-		input.MessageToRecipient, err = ui.PromptString("Message to recipient (optional)", false)
-		if err != nil {
-			return err
-		}
-	}
-	if err := promptExternalDestination(cmd, ctx, api, &input.ExternalAccountID, &input.AccountNumber, &input.RoutingNumber); err != nil {
-		return err
-	}
-	if input.RequireApproval == nil {
-		requireApproval, err := promptBool("Transfer handling", "Queue for approval", "Transfer without approval")
-		if err != nil {
-			return err
-		}
-		input.RequireApproval = boolPtr(requireApproval)
+		step++
 	}
 	return nil
+}
+
+func promptSourceAccountNumberSelection(cmd *cobra.Command, ctx *Context, api *increasex.Client, accountID string, required bool) (string, error) {
+	for {
+		numbers, _, err := ctx.Services.ListAccountNumbers(cmd.Context(), api, accountID, "active", 100, "")
+		if err != nil {
+			return "", err
+		}
+		options := []ui.Option{}
+		if len(numbers) > 0 {
+			options = append(options, ui.Option{
+				Label:       "Select an account number",
+				Value:       "select",
+				Description: "Choose an existing source account number",
+			})
+		}
+		options = append(options, ui.Option{
+			Label:       "Create an account number",
+			Value:       "create",
+			Description: "Mint a new account number without leaving the transfer flow",
+		})
+		if !required {
+			options = append(options, ui.Option{
+				Label:       "Skip",
+				Value:       "skip",
+				Description: "Leave the source account number unset",
+			})
+		}
+
+		action, err := promptSelectNavigation("Source account number", options, navBack, navExit)
+		if err != nil {
+			return "", err
+		}
+		switch action {
+		case "select":
+			selected, err := chooseAccountNumber(numbers, "Select a source account number")
+			if err != nil {
+				if isNavigateBack(err) {
+					continue
+				}
+				return "", err
+			}
+			return selected, nil
+		case "create":
+			args := []string{}
+			if accountID != "" {
+				args = append(args, "--account-id", accountID)
+			}
+			if err := invokeCommand(cmd, newAccountNumbersCreateCmd(ctx), args...); err != nil {
+				if isNavigateBack(err) {
+					continue
+				}
+				return "", err
+			}
+		case "skip":
+			return "", nil
+		}
+	}
 }
 
 func promptExternalDestination(cmd *cobra.Command, ctx *Context, api *increasex.Client, externalAccountID, accountNumber, routingNumber *string) error {
 	if strings.TrimSpace(*externalAccountID) != "" || (strings.TrimSpace(*accountNumber) != "" && strings.TrimSpace(*routingNumber) != "") {
 		return nil
 	}
-	choice, err := ui.PromptSelect("Destination", []ui.Option{
-		{Label: "Use a stored external account", Value: "stored"},
-		{Label: "Enter bank details manually", Value: "manual"},
-	})
-	if err != nil {
-		return err
-	}
-	if choice == "stored" {
-		externalAccounts, _, err := ctx.Services.ListExternalAccounts(cmd.Context(), api, "active", "", 25)
-		if err != nil {
-			return err
-		}
-		if len(externalAccounts) == 0 {
-			fmt.Println(mutedStyle.Render("No active external accounts found, switching to manual entry."))
-		} else {
-			selected, err := chooseExternalAccount(externalAccounts, "Select an external account")
+	step := 0
+	choice := ""
+	for step < 3 {
+		switch step {
+		case 0:
+			value, err := promptSelectNavigation("Destination", []ui.Option{
+				{Label: "Use a stored external account", Value: "stored"},
+				{Label: "Enter bank details manually", Value: "manual"},
+			}, navBack, navExit)
 			if err != nil {
 				return err
 			}
-			*externalAccountID = selected
-			return nil
+			choice = value
+			*externalAccountID = ""
+			*accountNumber = ""
+			*routingNumber = ""
+			if choice == "stored" {
+				externalAccounts, _, err := ctx.Services.ListExternalAccounts(cmd.Context(), api, "active", "", 25)
+				if err != nil {
+					return err
+				}
+				if len(externalAccounts) == 0 {
+					fmt.Println(mutedStyle.Render("No active external accounts found, switching to manual entry."))
+					choice = "manual"
+					step = 1
+					continue
+				}
+			}
+		case 1:
+			if choice == "stored" {
+				externalAccounts, _, err := ctx.Services.ListExternalAccounts(cmd.Context(), api, "active", "", 25)
+				if err != nil {
+					return err
+				}
+				selected, err := chooseExternalAccount(externalAccounts, "Select an external account")
+				if err != nil {
+					if isNavigateBack(err) {
+						step = 0
+						continue
+					}
+					return err
+				}
+				*externalAccountID = selected
+				return nil
+			}
+			value, err := promptStringNavigation("Routing number", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = 0
+					continue
+				}
+				return err
+			}
+			*routingNumber = value
+		case 2:
+			value, err := promptStringNavigation("Account number", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = 1
+					continue
+				}
+				return err
+			}
+			*accountNumber = value
 		}
+		step++
 	}
-	value, err := ui.PromptString("Routing number", true)
-	if err != nil {
-		return err
-	}
-	*routingNumber = value
-	value, err = ui.PromptString("Account number", true)
-	if err != nil {
-		return err
-	}
-	*accountNumber = value
 	return nil
 }
 
@@ -874,42 +1235,61 @@ func promptTransferAction(cmd *cobra.Command, ctx *Context, api *increasex.Clien
 		return nil
 	}
 	var err error
-	if input.Rail == "" {
-		input.Rail, err = promptRail("Transfer rail")
-		if err != nil {
-			return err
+	step := 0
+	for step < 2 {
+		switch step {
+		case 0:
+			if input.Rail != "" {
+				step++
+				continue
+			}
+			input.Rail, err = promptRail("Transfer rail")
+			if err != nil {
+				return err
+			}
+			input.Rail = normalizeTransferRail(input.Rail)
+		case 1:
+			if input.TransferID != "" {
+				step++
+				continue
+			}
+			var items []app.TransferSummary
+			if pendingOnly {
+				items, _, err = ctx.Services.ListTransferQueue(cmd.Context(), api, input.Rail, 20)
+			} else {
+				items, _, err = ctx.Services.ListTransfers(cmd.Context(), api, app.ListTransfersInput{
+					Rail:  input.Rail,
+					Limit: 20,
+				})
+			}
+			if err != nil {
+				return err
+			}
+			if len(items) == 0 {
+				return fmt.Errorf("no transfers available for rail %s", input.Rail)
+			}
+			input.TransferID, err = chooseTransfer(items, "Select a transfer")
+			if err != nil {
+				if isNavigateBack(err) {
+					step = 0
+					input.Rail = ""
+					continue
+				}
+				return err
+			}
 		}
+		step++
 	}
-	input.Rail = normalizeTransferRail(input.Rail)
-	if input.TransferID != "" {
-		return nil
-	}
-	var items []app.TransferSummary
-	if pendingOnly {
-		items, _, err = ctx.Services.ListTransferQueue(cmd.Context(), api, input.Rail, 20)
-	} else {
-		items, _, err = ctx.Services.ListTransfers(cmd.Context(), api, app.ListTransfersInput{
-			Rail:  input.Rail,
-			Limit: 20,
-		})
-	}
-	if err != nil {
-		return err
-	}
-	if len(items) == 0 {
-		return fmt.Errorf("no transfers available for rail %s", input.Rail)
-	}
-	input.TransferID, err = chooseTransfer(items, "Select a transfer")
-	return err
+	return nil
 }
 
 func promptExternalRail() (string, error) {
-	value, err := ui.PromptSelect("Transfer rail", []ui.Option{
+	value, err := promptSelectNavigation("Transfer rail", []ui.Option{
 		{Label: "ACH", Value: "ach"},
 		{Label: "Real-Time Payments", Value: "real_time_payments"},
 		{Label: "FedNow", Value: "fednow"},
 		{Label: "Wire", Value: "wire"},
-	})
+	}, navBack, navExit)
 	if err != nil {
 		return "", err
 	}
@@ -960,9 +1340,9 @@ func runExternalACH(cmd *cobra.Command, ctx *Context, session app.Session, api a
 		}
 		if !ctx.Options.Yes {
 			printPreview(preview)
-			confirmed, err := ui.Confirm("Execute this ACH transfer?")
+			confirmed, err := promptConfirmationNavigation(transferConfirmationPrompt("ach", input.RequireApproval))
 			if err != nil || !confirmed {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 		}
 		input.ConfirmationToken = preview.ConfirmationToken
@@ -997,9 +1377,9 @@ func runExternalRTP(cmd *cobra.Command, ctx *Context, session app.Session, api a
 		}
 		if !ctx.Options.Yes {
 			printPreview(preview)
-			confirmed, err := ui.Confirm("Execute this Real-Time Payments transfer?")
+			confirmed, err := promptConfirmationNavigation(transferConfirmationPrompt("real_time_payments", input.RequireApproval))
 			if err != nil || !confirmed {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 		}
 		input.ConfirmationToken = preview.ConfirmationToken
@@ -1034,9 +1414,9 @@ func runExternalFedNow(cmd *cobra.Command, ctx *Context, session app.Session, ap
 		}
 		if !ctx.Options.Yes {
 			printPreview(preview)
-			confirmed, err := ui.Confirm("Execute this FedNow transfer?")
+			confirmed, err := promptConfirmationNavigation(transferConfirmationPrompt("fednow", input.RequireApproval))
 			if err != nil || !confirmed {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 		}
 		input.ConfirmationToken = preview.ConfirmationToken
@@ -1071,9 +1451,9 @@ func runExternalWire(cmd *cobra.Command, ctx *Context, session app.Session, api 
 		}
 		if !ctx.Options.Yes {
 			printPreview(preview)
-			confirmed, err := ui.Confirm("Execute this wire transfer?")
+			confirmed, err := promptConfirmationNavigation(transferConfirmationPrompt("wire", input.RequireApproval))
 			if err != nil || !confirmed {
-				return err
+				return bubbleNavigation(cmd, err)
 			}
 		}
 		input.ConfirmationToken = preview.ConfirmationToken

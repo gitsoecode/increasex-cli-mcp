@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jessevaughan/increasex/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
 )
 
 func TestKeychainStoreSaveVerifiesRoundTrip(t *testing.T) {

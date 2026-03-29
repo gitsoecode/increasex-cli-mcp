@@ -5,22 +5,25 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	increase "github.com/Increase/increase-go"
-	"github.com/jessevaughan/increasex/internal/auth"
-	increasex "github.com/jessevaughan/increasex/internal/increase"
-	"github.com/jessevaughan/increasex/internal/util"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/auth"
+	increasex "github.com/gitsoecode/increasex-cli-mcp/internal/increase"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
 
 type Services struct {
 	auth    auth.Service
 	confirm ConfirmationService
+	now     func() time.Time
 }
 
 func NewServices() Services {
 	return Services{
 		auth:    auth.NewService(),
 		confirm: NewConfirmationService(),
+		now:     time.Now,
 	}
 }
 
@@ -66,7 +69,7 @@ func (s Services) WhoAmI(ctx context.Context, api *increasex.Client, session Ses
 		"active_profile": session.ProfileName,
 		"environment":    session.Environment,
 		"token_source":   session.TokenSource,
-		"identity":       identity,
+		"entity_id":      identity,
 		"mcp_ready":      true,
 	}, result.RequestID, nil
 }
@@ -93,6 +96,187 @@ func (s Services) ListAccounts(ctx context.Context, api *increasex.Client, statu
 		accounts = append(accounts, normalizeAccount(account))
 	}
 	return accounts, result.RequestID, nil
+}
+
+func (s Services) ListAccountNumbers(ctx context.Context, api *increasex.Client, accountID, status string, limit int64, cursor string) ([]AccountNumberSummary, string, error) {
+	params := increase.AccountNumberListParams{}
+	if accountID != "" {
+		params.AccountID = increase.String(accountID)
+	}
+	if status != "" {
+		params.Status = increase.F(increase.AccountNumberListParamsStatus{
+			In: increase.F([]increase.AccountNumberListParamsStatusIn{increase.AccountNumberListParamsStatusIn(status)}),
+		})
+	}
+	if limit > 0 {
+		params.Limit = increase.Int(limit)
+	}
+	if cursor != "" {
+		params.Cursor = increase.String(cursor)
+	}
+	result, err := api.ListAccountNumbers(ctx, params)
+	if err != nil {
+		return nil, "", err
+	}
+	numbers := make([]AccountNumberSummary, 0, len(result.Data))
+	for _, number := range result.Data {
+		numbers = append(numbers, normalizeAccountNumber(number))
+	}
+	numbers = s.attachAccountNamesToAccountNumbers(ctx, api, numbers)
+	return numbers, result.RequestID, nil
+}
+
+func (s Services) RetrieveAccountNumber(ctx context.Context, api *increasex.Client, accountNumberID string) (*AccountNumberDetails, string, error) {
+	result, err := api.GetAccountNumber(ctx, accountNumberID)
+	if err != nil {
+		return nil, "", err
+	}
+	details := normalizeAccountNumberDetails(*result.Data)
+	details = s.attachAccountNameToAccountNumberDetails(ctx, api, details)
+	return &details, result.RequestID, nil
+}
+
+func (s Services) RetrieveSensitiveAccountNumberDetails(ctx context.Context, api *increasex.Client, accountNumberID string) (*AccountNumberDetails, string, error) {
+	result, err := api.GetAccountNumber(ctx, accountNumberID)
+	if err != nil {
+		return nil, "", err
+	}
+	details := normalizeSensitiveAccountNumberDetails(*result.Data)
+	details = s.attachAccountNameToAccountNumberDetails(ctx, api, details)
+	return &details, result.RequestID, nil
+}
+
+func (s Services) attachAccountNamesToAccountNumbers(ctx context.Context, api *increasex.Client, numbers []AccountNumberSummary) []AccountNumberSummary {
+	accountNames := s.resolveAccountNames(ctx, api, collectAccountNumberAccountIDs(numbers))
+	if len(accountNames) == 0 {
+		return numbers
+	}
+	enriched := make([]AccountNumberSummary, 0, len(numbers))
+	for _, number := range numbers {
+		enriched = append(enriched, enrichAccountNumberSummary(number, accountNames))
+	}
+	return enriched
+}
+
+func (s Services) attachAccountNameToAccountNumberDetails(ctx context.Context, api *increasex.Client, details AccountNumberDetails) AccountNumberDetails {
+	accountNames := s.resolveAccountNames(ctx, api, []string{details.AccountID})
+	return enrichAccountNumberDetails(details, accountNames)
+}
+
+func (s Services) resolveAccountNames(ctx context.Context, api *increasex.Client, accountIDs []string) map[string]string {
+	names := map[string]string{}
+	for _, accountID := range uniqueNonEmptyStrings(accountIDs) {
+		result, err := api.GetAccount(ctx, accountID)
+		if err != nil || result.Data == nil {
+			continue
+		}
+		if strings.TrimSpace(result.Data.Name) != "" {
+			names[accountID] = result.Data.Name
+		}
+	}
+	return names
+}
+
+func collectAccountNumberAccountIDs(numbers []AccountNumberSummary) []string {
+	ids := make([]string, 0, len(numbers))
+	for _, number := range numbers {
+		ids = append(ids, number.AccountID)
+	}
+	return ids
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func enrichAccountNumberSummary(summary AccountNumberSummary, accountNames map[string]string) AccountNumberSummary {
+	if accountName := strings.TrimSpace(accountNames[summary.AccountID]); accountName != "" {
+		summary.AccountName = accountName
+	}
+	return summary
+}
+
+func enrichAccountNumberDetails(details AccountNumberDetails, accountNames map[string]string) AccountNumberDetails {
+	details.AccountNumberSummary = enrichAccountNumberSummary(details.AccountNumberSummary, accountNames)
+	return details
+}
+
+func (s Services) ListPrograms(ctx context.Context, api *increasex.Client, limit int64, cursor string) ([]ProgramSummary, string, error) {
+	params := increase.ProgramListParams{}
+	if limit > 0 {
+		params.Limit = increase.Int(limit)
+	}
+	if cursor != "" {
+		params.Cursor = increase.String(cursor)
+	}
+	result, err := api.ListPrograms(ctx, params)
+	if err != nil {
+		return nil, "", err
+	}
+	programs := make([]ProgramSummary, 0, len(result.Data))
+	for _, program := range result.Data {
+		programs = append(programs, normalizeProgram(program))
+	}
+	return programs, result.RequestID, nil
+}
+
+func (s Services) RetrieveProgram(ctx context.Context, api *increasex.Client, programID string) (*ProgramSummary, string, error) {
+	result, err := api.GetProgram(ctx, programID)
+	if err != nil {
+		return nil, "", err
+	}
+	summary := normalizeProgram(*result.Data)
+	return &summary, result.RequestID, nil
+}
+
+func (s Services) ListDigitalCardProfiles(ctx context.Context, api *increasex.Client, status, idempotencyKey, cursor string, limit int64) ([]DigitalCardProfileSummary, string, error) {
+	params := increase.DigitalCardProfileListParams{}
+	if cursor != "" {
+		params.Cursor = increase.String(cursor)
+	}
+	if idempotencyKey != "" {
+		params.IdempotencyKey = increase.String(idempotencyKey)
+	}
+	if limit > 0 {
+		params.Limit = increase.Int(limit)
+	}
+	if status != "" {
+		params.Status = increase.F(increase.DigitalCardProfileListParamsStatus{
+			In: increase.F([]increase.DigitalCardProfileListParamsStatusIn{increase.DigitalCardProfileListParamsStatusIn(status)}),
+		})
+	}
+	result, err := api.ListDigitalCardProfiles(ctx, params)
+	if err != nil {
+		return nil, "", err
+	}
+	profiles := make([]DigitalCardProfileSummary, 0, len(result.Data))
+	for _, profile := range result.Data {
+		profiles = append(profiles, normalizeDigitalCardProfile(profile))
+	}
+	return profiles, result.RequestID, nil
+}
+
+func (s Services) RetrieveDigitalCardProfile(ctx context.Context, api *increasex.Client, digitalCardProfileID string) (*DigitalCardProfileSummary, string, error) {
+	result, err := api.GetDigitalCardProfile(ctx, digitalCardProfileID)
+	if err != nil {
+		return nil, "", err
+	}
+	summary := normalizeDigitalCardProfile(*result.Data)
+	return &summary, result.RequestID, nil
 }
 
 func (s Services) ResolveAccount(ctx context.Context, api *increasex.Client, query string, limit int64) ([]map[string]any, string, error) {
@@ -171,34 +355,102 @@ func (s Services) GetBalance(ctx context.Context, api *increasex.Client, account
 	}, result.RequestID, nil
 }
 
-func (s Services) ListRecentTransactions(ctx context.Context, api *increasex.Client, accountID, since, cursor string, limit int64, categories []string) ([]TransactionSummary, string, error) {
-	params := increase.TransactionListParams{}
-	if accountID != "" {
-		params.AccountID = increase.String(accountID)
+func (s Services) ListEvents(ctx context.Context, api *increasex.Client, input ListEventsInput) ([]EventSummary, string, error) {
+	params := increase.EventListParams{}
+	if input.AssociatedObjectID != "" {
+		params.AssociatedObjectID = increase.String(input.AssociatedObjectID)
 	}
-	if limit > 0 {
-		params.Limit = increase.Int(limit)
+	if input.Cursor != "" {
+		params.Cursor = increase.String(input.Cursor)
 	}
-	if cursor != "" {
-		params.Cursor = increase.String(cursor)
+	if input.Limit > 0 {
+		params.Limit = increase.Int(input.Limit)
 	}
-	if since != "" {
-		parsed, err := increasex.ParseSince(since)
-		if err != nil {
-			return nil, "", util.NewError(util.CodeValidationError, "since must be RFC3339", nil, false)
+	if len(input.Categories) > 0 {
+		values := make([]increase.EventListParamsCategoryIn, 0, len(input.Categories))
+		for _, category := range input.Categories {
+			values = append(values, increase.EventListParamsCategoryIn(category))
 		}
-		params.CreatedAt = increase.F(increase.TransactionListParamsCreatedAt{
-			OnOrAfter: increase.F(parsed),
-		})
-	}
-	if len(categories) > 0 {
-		values := make([]increase.TransactionListParamsCategoryIn, 0, len(categories))
-		for _, category := range categories {
-			values = append(values, increase.TransactionListParamsCategoryIn(category))
-		}
-		params.Category = increase.F(increase.TransactionListParamsCategory{
+		params.Category = increase.F(increase.EventListParamsCategory{
 			In: increase.F(values),
 		})
+	}
+	since, until, err := parseOptionalRFC3339Bounds(input.TimeRange.Since, input.TimeRange.Until, "since", "until")
+	if err != nil {
+		return nil, "", err
+	}
+	if since != nil || until != nil {
+		createdAt := increase.EventListParamsCreatedAt{}
+		if since != nil {
+			createdAt.OnOrAfter = increase.F(*since)
+		}
+		if until != nil {
+			createdAt.OnOrBefore = increase.F(*until)
+		}
+		params.CreatedAt = increase.F(createdAt)
+	}
+	result, err := api.ListEvents(ctx, params)
+	if err != nil {
+		return nil, "", err
+	}
+	events := make([]EventSummary, 0, len(result.Data))
+	for _, event := range result.Data {
+		events = append(events, normalizeEvent(event))
+	}
+	return events, result.RequestID, nil
+}
+
+func (s Services) RetrieveEvent(ctx context.Context, api *increasex.Client, eventID string) (*EventSummary, string, error) {
+	result, err := api.GetEvent(ctx, eventID)
+	if err != nil {
+		return nil, "", err
+	}
+	summary := normalizeEvent(*result.Data)
+	return &summary, result.RequestID, nil
+}
+
+func (s Services) ListDocuments(ctx context.Context, api *increasex.Client, input ListDocumentsInput) ([]DocumentSummary, string, error) {
+	since, until, err := parseOptionalRFC3339Bounds(input.TimeRange.Since, input.TimeRange.Until, "since", "until")
+	if err != nil {
+		return nil, "", err
+	}
+	params := increasex.DocumentListParams{
+		Cursor:         input.Cursor,
+		EntityID:       input.EntityID,
+		Categories:     input.Categories,
+		IdempotencyKey: input.IdempotencyKey,
+		Limit:          input.Limit,
+	}
+	if since != nil {
+		params.CreatedOnOrAfter = since
+	}
+	if until != nil {
+		params.CreatedOnOrBefore = until
+	}
+	result, err := api.ListDocuments(ctx, params)
+	if err != nil {
+		return nil, "", err
+	}
+	documents := make([]DocumentSummary, 0, len(result.Data))
+	for _, document := range result.Data {
+		documents = append(documents, normalizeDocument(document))
+	}
+	return documents, result.RequestID, nil
+}
+
+func (s Services) RetrieveDocument(ctx context.Context, api *increasex.Client, documentID string) (*DocumentSummary, string, error) {
+	result, err := api.GetDocument(ctx, documentID)
+	if err != nil {
+		return nil, "", err
+	}
+	summary := normalizeDocument(*result.Data)
+	return &summary, result.RequestID, nil
+}
+
+func (s Services) ListRecentTransactions(ctx context.Context, api *increasex.Client, input ListTransactionsInput) ([]TransactionSummary, string, error) {
+	params, err := s.buildTransactionListParams(input)
+	if err != nil {
+		return nil, "", err
 	}
 	result, err := api.ListTransactions(ctx, params)
 	if err != nil {
@@ -209,6 +461,150 @@ func (s Services) ListRecentTransactions(ctx context.Context, api *increasex.Cli
 		transactions = append(transactions, normalizeTransaction(txn))
 	}
 	return transactions, result.RequestID, nil
+}
+
+func (s Services) buildTransactionListParams(input ListTransactionsInput) (increase.TransactionListParams, error) {
+	params := increase.TransactionListParams{}
+	if input.AccountID != "" {
+		params.AccountID = increase.String(input.AccountID)
+	}
+	if input.Limit > 0 {
+		params.Limit = increase.Int(input.Limit)
+	}
+	if input.Cursor != "" {
+		params.Cursor = increase.String(input.Cursor)
+	}
+	createdAt, err := s.resolveTransactionCreatedAt(input.TimeRange)
+	if err != nil {
+		return increase.TransactionListParams{}, err
+	}
+	params.CreatedAt = increase.F(createdAt)
+	if len(input.Categories) > 0 {
+		values := make([]increase.TransactionListParamsCategoryIn, 0, len(input.Categories))
+		for _, category := range input.Categories {
+			values = append(values, increase.TransactionListParamsCategoryIn(category))
+		}
+		params.Category = increase.F(increase.TransactionListParamsCategory{
+			In: increase.F(values),
+		})
+	}
+	return params, nil
+}
+
+func (s Services) resolveTransactionCreatedAt(input TransactionTimeRangeInput) (increase.TransactionListParamsCreatedAt, error) {
+	since, until, err := s.resolveTransactionTimeRange(input)
+	if err != nil {
+		return increase.TransactionListParamsCreatedAt{}, err
+	}
+	createdAt := increase.TransactionListParamsCreatedAt{}
+	if since != nil {
+		createdAt.OnOrAfter = increase.F(*since)
+	}
+	if until != nil {
+		createdAt.OnOrBefore = increase.F(*until)
+	}
+	return createdAt, nil
+}
+
+func (s Services) resolveTransactionTimeRange(input TransactionTimeRangeInput) (*time.Time, *time.Time, error) {
+	sinceText := strings.TrimSpace(input.Since)
+	untilText := strings.TrimSpace(input.Until)
+	period := strings.TrimSpace(input.Period)
+
+	if sinceText != "" || untilText != "" {
+		period = ""
+	}
+
+	var since, until *time.Time
+	if period != "" {
+		resolvedSince, resolvedUntil, err := s.resolveTransactionPeriodPreset(period)
+		if err != nil {
+			return nil, nil, err
+		}
+		since = &resolvedSince
+		until = &resolvedUntil
+	}
+
+	if sinceText != "" {
+		parsed, err := increasex.ParseRFC3339(sinceText)
+		if err != nil {
+			return nil, nil, util.NewError(util.CodeValidationError, "since must be RFC3339", nil, false)
+		}
+		value := parsed.UTC()
+		since = &value
+	}
+	if untilText != "" {
+		parsed, err := increasex.ParseRFC3339(untilText)
+		if err != nil {
+			return nil, nil, util.NewError(util.CodeValidationError, "until must be RFC3339", nil, false)
+		}
+		value := parsed.UTC()
+		until = &value
+	}
+
+	if since == nil && until == nil {
+		now := s.currentTime().UTC()
+		value := now.AddDate(0, 0, -30)
+		since = &value
+	}
+	if since != nil && until != nil && since.After(*until) {
+		return nil, nil, util.NewError(util.CodeValidationError, "since must be before or equal to until", nil, false)
+	}
+	return since, until, nil
+}
+
+func (s Services) resolveTransactionPeriodPreset(period string) (time.Time, time.Time, error) {
+	now := s.currentTime().UTC()
+	switch period {
+	case "last-7d":
+		return now.AddDate(0, 0, -7), now, nil
+	case "last-30d":
+		return now.AddDate(0, 0, -30), now, nil
+	case "current-month":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return start, now, nil
+	case "previous-month":
+		currentMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		previousMonthStart := currentMonthStart.AddDate(0, -1, 0)
+		previousMonthEnd := currentMonthStart.Add(-time.Second)
+		return previousMonthStart, previousMonthEnd, nil
+	default:
+		return time.Time{}, time.Time{}, util.NewError(util.CodeValidationError, "period must be one of last-7d, last-30d, current-month, previous-month", nil, false)
+	}
+}
+
+func parseOptionalRFC3339Bounds(sinceText, untilText, sinceLabel, untilLabel string) (*time.Time, *time.Time, error) {
+	sinceText = strings.TrimSpace(sinceText)
+	untilText = strings.TrimSpace(untilText)
+
+	var since, until *time.Time
+	if sinceText != "" {
+		parsed, err := increasex.ParseRFC3339(sinceText)
+		if err != nil {
+			return nil, nil, util.NewError(util.CodeValidationError, fmt.Sprintf("%s must be RFC3339", sinceLabel), nil, false)
+		}
+		value := parsed.UTC()
+		since = &value
+	}
+	if untilText != "" {
+		parsed, err := increasex.ParseRFC3339(untilText)
+		if err != nil {
+			return nil, nil, util.NewError(util.CodeValidationError, fmt.Sprintf("%s must be RFC3339", untilLabel), nil, false)
+		}
+		value := parsed.UTC()
+		until = &value
+	}
+	if since != nil && until != nil && since.After(*until) {
+		return nil, nil, util.NewError(util.CodeValidationError, fmt.Sprintf("%s must be before or equal to %s", sinceLabel, untilLabel), nil, false)
+	}
+	return since, until, nil
+}
+
+func (s Services) currentTime() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 func (s Services) ListCards(ctx context.Context, api *increasex.Client, accountID, status, cursor string, limit int64) ([]CardSummary, string, error) {
@@ -335,6 +731,9 @@ func (s Services) ExecuteCloseAccount(ctx context.Context, api *increasex.Client
 }
 
 func (s Services) PreviewCreateAccountNumber(session Session, input CreateAccountNumberInput) (*PreviewResult, error) {
+	if err := validateCreateAccountNumberInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("create_account_number", session, effective)
 	if err != nil {
@@ -349,6 +748,9 @@ func (s Services) PreviewCreateAccountNumber(session Session, input CreateAccoun
 }
 
 func (s Services) ExecuteCreateAccountNumber(ctx context.Context, api *increasex.Client, session Session, input CreateAccountNumberInput) (any, string, error) {
+	if err := validateCreateAccountNumberInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "create_account_number", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
@@ -380,6 +782,42 @@ func (s Services) ExecuteCreateAccountNumber(ctx context.Context, api *increasex
 	}, result.RequestID, nil
 }
 
+func (s Services) PreviewDisableAccountNumber(session Session, input DisableAccountNumberInput) (*PreviewResult, error) {
+	if err := validateDisableAccountNumberInput(input); err != nil {
+		return nil, err
+	}
+	effective := effectiveConfirmationPayload(input)
+	token, err := s.confirm.Generate("disable_account_number", session, effective)
+	if err != nil {
+		return nil, err
+	}
+	return &PreviewResult{
+		Mode:              "preview",
+		Summary:           fmt.Sprintf("Disable account number %s", input.AccountNumberID),
+		ConfirmationToken: token,
+		Details:           effective,
+	}, nil
+}
+
+func (s Services) ExecuteDisableAccountNumber(ctx context.Context, api *increasex.Client, session Session, input DisableAccountNumberInput) (any, string, error) {
+	if err := validateDisableAccountNumberInput(input); err != nil {
+		return nil, "", err
+	}
+	if err := s.confirm.Verify(input.ConfirmationToken, "disable_account_number", session, effectiveConfirmationPayload(input)); err != nil {
+		return nil, "", err
+	}
+	result, err := api.UpdateAccountNumber(ctx, input.AccountNumberID, increase.AccountNumberUpdateParams{
+		Status: increase.F(increase.AccountNumberUpdateParamsStatusDisabled),
+	}, input.IdempotencyKey)
+	if err != nil {
+		return nil, "", err
+	}
+	return map[string]any{
+		"mode":           "executed",
+		"account_number": normalizeAccountNumber(*result.Data),
+	}, result.RequestID, nil
+}
+
 func (s Services) PreviewInternalTransfer(session Session, input MoveMoneyInternalInput) (*PreviewResult, error) {
 	effective := effectiveConfirmationPayload(input)
 	if input.Description == "" {
@@ -391,7 +829,7 @@ func (s Services) PreviewInternalTransfer(session Session, input MoveMoneyIntern
 	}
 	return &PreviewResult{
 		Mode:              "preview",
-		Summary:           fmt.Sprintf("Transfer %s from %s to %s", util.FormatUSDMinor(input.AmountCents), input.FromAccountID, input.ToAccountID),
+		Summary:           transferPreviewSummary("account", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
 		ConfirmationToken: token,
 		Details:           effective,
 	}, nil
@@ -426,6 +864,8 @@ func (s Services) ExecuteInternalTransfer(ctx context.Context, api *increasex.Cl
 	}
 	return map[string]any{
 		"mode":            "executed",
+		"outcome":         transferOutcome(input.RequireApproval),
+		"message":         transferOutcomeMessage("account", input.RequireApproval),
 		"transfer_id":     result.Data.ID,
 		"status":          string(result.Data.Status),
 		"from_account_id": result.Data.AccountID,
@@ -436,6 +876,9 @@ func (s Services) ExecuteInternalTransfer(ctx context.Context, api *increasex.Cl
 }
 
 func (s Services) PreviewCreateCard(session Session, input CreateCardInput) (*PreviewResult, error) {
+	if err := validateCreateCardInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("create_card", session, effective)
 	if err != nil {
@@ -450,6 +893,9 @@ func (s Services) PreviewCreateCard(session Session, input CreateCardInput) (*Pr
 }
 
 func (s Services) ExecuteCreateCard(ctx context.Context, api *increasex.Client, session Session, input CreateCardInput) (any, string, error) {
+	if err := validateCreateCardInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "create_card", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
@@ -511,7 +957,7 @@ func (s Services) PreviewExternalACH(session Session, input ACHTransferInput) (*
 	}
 	return &PreviewResult{
 		Mode:              "preview",
-		Summary:           fmt.Sprintf("Send ACH transfer %s", util.FormatUSDMinor(input.AmountCents)),
+		Summary:           transferPreviewSummary("ach", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
 		ConfirmationToken: token,
 		Details:           effective,
 	}, nil
@@ -571,6 +1017,8 @@ func (s Services) ExecuteExternalACH(ctx context.Context, api *increasex.Client,
 	}
 	return map[string]any{
 		"mode":        "executed",
+		"outcome":     transferOutcome(input.RequireApproval),
+		"message":     transferOutcomeMessage("ach", input.RequireApproval),
 		"rail":        "ach",
 		"transfer_id": result.Data.ID,
 		"status":      string(result.Data.Status),
@@ -586,7 +1034,7 @@ func (s Services) PreviewExternalRTP(session Session, input RTPTransferInput) (*
 	}
 	return &PreviewResult{
 		Mode:              "preview",
-		Summary:           fmt.Sprintf("Send RTP transfer %s", util.FormatUSDMinor(input.AmountCents)),
+		Summary:           transferPreviewSummary("real_time_payments", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
 		ConfirmationToken: token,
 		Details:           effective,
 	}, nil
@@ -595,6 +1043,9 @@ func (s Services) PreviewExternalRTP(session Session, input RTPTransferInput) (*
 func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client, session Session, input RTPTransferInput) (any, string, error) {
 	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_rtp", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
+	}
+	if strings.TrimSpace(input.SourceAccountNumberID) == "" {
+		return nil, "", sourceAccountNumberRequiredError("source_account_number_id")
 	}
 	params := increase.RealTimePaymentsTransferNewParams{
 		Amount:                            increase.Int(input.AmountCents),
@@ -629,7 +1080,9 @@ func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client,
 	}
 	return map[string]any{
 		"mode":        "executed",
-		"rail":        "rtp",
+		"outcome":     transferOutcome(input.RequireApproval),
+		"message":     transferOutcomeMessage("real_time_payments", input.RequireApproval),
+		"rail":        "real_time_payments",
 		"transfer_id": result.Data.ID,
 		"status":      string(result.Data.Status),
 		"created_at":  util.RFC3339OrEmpty(result.Data.CreatedAt),
@@ -644,7 +1097,7 @@ func (s Services) PreviewExternalFedNow(session Session, input FedNowTransferInp
 	}
 	return &PreviewResult{
 		Mode:              "preview",
-		Summary:           fmt.Sprintf("Send FedNow transfer %s", util.FormatUSDMinor(input.AmountCents)),
+		Summary:           transferPreviewSummary("fednow", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
 		ConfirmationToken: token,
 		Details:           effective,
 	}, nil
@@ -653,6 +1106,9 @@ func (s Services) PreviewExternalFedNow(session Session, input FedNowTransferInp
 func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Client, session Session, input FedNowTransferInput) (any, string, error) {
 	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_fednow", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
+	}
+	if strings.TrimSpace(input.SourceAccountNumberID) == "" {
+		return nil, "", sourceAccountNumberRequiredError("source_account_number_id")
 	}
 	if input.ExternalAccountID == "" && (input.AccountNumber == "" || input.RoutingNumber == "") {
 		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
@@ -692,6 +1148,8 @@ func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Clie
 	}
 	return map[string]any{
 		"mode":        "executed",
+		"outcome":     transferOutcome(input.RequireApproval),
+		"message":     transferOutcomeMessage("fednow", input.RequireApproval),
 		"rail":        "fednow",
 		"transfer_id": result.Data.ID,
 		"status":      result.Data.Status,
@@ -707,7 +1165,7 @@ func (s Services) PreviewExternalWire(session Session, input WireTransferInput) 
 	}
 	return &PreviewResult{
 		Mode:              "preview",
-		Summary:           fmt.Sprintf("Send wire transfer %s", util.FormatUSDMinor(input.AmountCents)),
+		Summary:           transferPreviewSummary("wire", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
 		ConfirmationToken: token,
 		Details:           effective,
 	}, nil
@@ -742,6 +1200,9 @@ func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client
 	if input.ExternalAccountID != "" {
 		params.ExternalAccountID = increase.String(input.ExternalAccountID)
 	}
+	if input.SourceAccountNumberID != "" {
+		params.SourceAccountNumberID = increase.String(input.SourceAccountNumberID)
+	}
 	if input.BeneficiaryAddressLine1 != "" {
 		params.Creditor = increase.F(increase.WireTransferNewParamsCreditor{
 			Name: increase.String(input.BeneficiaryName),
@@ -775,11 +1236,55 @@ func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client
 	}
 	return map[string]any{
 		"mode":        "executed",
+		"outcome":     transferOutcome(input.RequireApproval),
+		"message":     transferOutcomeMessage("wire", input.RequireApproval),
 		"rail":        "wire",
 		"transfer_id": result.Data.ID,
 		"status":      string(result.Data.Status),
 		"created_at":  util.RFC3339OrEmpty(result.Data.CreatedAt),
 	}, result.RequestID, nil
+}
+
+func transferPreviewSummary(rail string, requireApproval *bool, amount string) string {
+	if isApprovalRequired(requireApproval) {
+		return fmt.Sprintf("Queue %s transfer %s for approval", transferRailLabel(rail), amount)
+	}
+	return fmt.Sprintf("Create %s transfer %s", transferRailLabel(rail), amount)
+}
+
+func transferOutcome(requireApproval *bool) string {
+	if isApprovalRequired(requireApproval) {
+		return "queued_for_approval"
+	}
+	return "submitted"
+}
+
+func transferOutcomeMessage(rail string, requireApproval *bool) string {
+	if isApprovalRequired(requireApproval) {
+		return fmt.Sprintf("%s transfer queued for approval", transferRailLabel(rail))
+	}
+	return fmt.Sprintf("%s transfer submitted", transferRailLabel(rail))
+}
+
+func transferRailLabel(rail string) string {
+	switch rail {
+	case "account":
+		return "account"
+	case "ach":
+		return "ACH"
+	case "real_time_payments":
+		return "Real-Time Payments"
+	case "fednow":
+		return "FedNow"
+	case "wire":
+		return "wire"
+	default:
+		return rail
+	}
+}
+
+func isApprovalRequired(requireApproval *bool) bool {
+	return requireApproval != nil && *requireApproval
 }
 
 func normalizeAccount(account increase.Account) AccountSummary {
@@ -791,6 +1296,75 @@ func normalizeAccount(account increase.Account) AccountSummary {
 		InformationalEntityID: account.InformationalEntityID,
 		ProgramID:             account.ProgramID,
 		CreatedAt:             util.RFC3339OrEmpty(account.CreatedAt),
+	}
+}
+
+func normalizeAccountNumber(number increase.AccountNumber) AccountNumberSummary {
+	return AccountNumberSummary{
+		ID:                  number.ID,
+		AccountID:           number.AccountID,
+		Name:                number.Name,
+		RoutingNumber:       number.RoutingNumber,
+		AccountNumberMasked: util.MaskAccountNumber(number.AccountNumber),
+		Status:              string(number.Status),
+		CreatedAt:           util.RFC3339OrEmpty(number.CreatedAt),
+		InboundACH: &InboundACHInput{
+			DebitStatus: string(number.InboundACH.DebitStatus),
+		},
+		InboundChecks: &InboundChecksInput{
+			Status: string(number.InboundChecks.Status),
+		},
+	}
+}
+
+func normalizeAccountNumberDetails(number increase.AccountNumber) AccountNumberDetails {
+	return AccountNumberDetails{
+		AccountNumberSummary: normalizeAccountNumber(number),
+		IdempotencyKey:       number.IdempotencyKey,
+	}
+}
+
+func normalizeSensitiveAccountNumberDetails(number increase.AccountNumber) AccountNumberDetails {
+	details := normalizeAccountNumberDetails(number)
+	details.AccountNumber = number.AccountNumber
+	return details
+}
+
+func normalizeProgram(program increase.Program) ProgramSummary {
+	summary := ProgramSummary{
+		ID:                          program.ID,
+		Name:                        program.Name,
+		Bank:                        string(program.Bank),
+		BillingAccountID:            program.BillingAccountID,
+		DefaultDigitalCardProfileID: program.DefaultDigitalCardProfileID,
+		InterestRate:                program.InterestRate,
+		CreatedAt:                   util.RFC3339OrEmpty(program.CreatedAt),
+		UpdatedAt:                   util.RFC3339OrEmpty(program.UpdatedAt),
+	}
+	if program.Lending.MaximumExtendableCredit != 0 {
+		summary.MaximumExtendableCredit = program.Lending.MaximumExtendableCredit
+	}
+	return summary
+}
+
+func normalizeDigitalCardProfile(profile increase.DigitalCardProfile) DigitalCardProfileSummary {
+	return DigitalCardProfileSummary{
+		ID:                    profile.ID,
+		Description:           profile.Description,
+		CardDescription:       profile.CardDescription,
+		IssuerName:            profile.IssuerName,
+		Status:                string(profile.Status),
+		AppIconFileID:         profile.AppIconFileID,
+		BackgroundImageFileID: profile.BackgroundImageFileID,
+		ContactEmail:          profile.ContactEmail,
+		ContactPhone:          profile.ContactPhone,
+		ContactWebsite:        profile.ContactWebsite,
+		TextColor: DigitalCardProfileTextColorSummary{
+			Red:   profile.TextColor.Red,
+			Green: profile.TextColor.Green,
+			Blue:  profile.TextColor.Blue,
+		},
+		CreatedAt: util.RFC3339OrEmpty(profile.CreatedAt),
 	}
 }
 
@@ -810,6 +1384,74 @@ func normalizeTransaction(txn increase.Transaction) TransactionSummary {
 		RouteID:             txn.RouteID,
 		RouteType:           string(txn.RouteType),
 		CounterpartySummary: txn.Description,
+	}
+}
+
+func normalizeEvent(event increase.Event) EventSummary {
+	return EventSummary{
+		ID:                   event.ID,
+		AssociatedObjectID:   event.AssociatedObjectID,
+		AssociatedObjectType: event.AssociatedObjectType,
+		Category:             string(event.Category),
+		CreatedAt:            util.RFC3339OrEmpty(event.CreatedAt),
+	}
+}
+
+func normalizeDocument(document increasex.Document) DocumentSummary {
+	return DocumentSummary{
+		ID:                        document.ID,
+		Category:                  document.Category,
+		EntityID:                  document.EntityID,
+		FileID:                    document.FileID,
+		IdempotencyKey:            document.IdempotencyKey,
+		CreatedAt:                 util.RFC3339OrEmpty(document.CreatedAt),
+		AccountVerificationLetter: document.AccountVerificationLetter,
+		FundingInstructions:       document.FundingInstructions,
+	}
+}
+
+func validateCreateAccountNumberInput(input CreateAccountNumberInput) error {
+	fields := []util.FieldError{}
+	if strings.TrimSpace(input.AccountID) == "" {
+		fields = append(fields, util.FieldError{Field: "account_id", Message: "is required"})
+	}
+	if strings.TrimSpace(input.Name) == "" {
+		fields = append(fields, util.FieldError{Field: "name", Message: "is required"})
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please correct the highlighted account number fields.",
+		Fields:  fields,
+	}
+}
+
+func validateDisableAccountNumberInput(input DisableAccountNumberInput) error {
+	if strings.TrimSpace(input.AccountNumberID) != "" {
+		return nil
+	}
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please select an account number to disable.",
+		Fields: []util.FieldError{
+			{Field: "account_number_id", Message: "is required"},
+		},
+	}
+}
+
+func sourceAccountNumberRequiredError(field string) error {
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "source_account_number_id is required for this transfer rail. Use list_account_numbers to discover one or create_account_number to mint a new one.",
+		Details: map[string]any{
+			"discovery_tool": "list_account_numbers",
+			"create_tool":    "create_account_number",
+		},
+		Fields: []util.FieldError{
+			{Field: field, Message: "is required"},
+		},
 	}
 }
 

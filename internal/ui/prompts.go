@@ -3,9 +3,11 @@ package ui
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/manifoldco/promptui"
+	"golang.org/x/term"
 )
 
 type Option struct {
@@ -41,6 +43,7 @@ func PromptString(label string, required bool) (string, error) {
 }
 
 func PromptSelect(label string, options []Option) (string, error) {
+	displayOptions := fitSelectOptionsToWidth(options)
 	templates := &promptui.SelectTemplates{
 		Label:    "{{ . }}",
 		Active:   "-> {{ .Label | cyan }} {{ if .Description }}{{ .Description | faint }}{{ end }}",
@@ -61,9 +64,9 @@ func PromptSelect(label string, options []Option) (string, error) {
 
 	prompt := promptui.Select{
 		Label:             label,
-		Items:             options,
+		Items:             displayOptions,
 		Templates:         templates,
-		Size:              min(12, len(options)),
+		Size:              min(12, len(displayOptions)),
 		Searcher:          searcher,
 		StartInSearchMode: true,
 		HideSelected:      false,
@@ -87,6 +90,40 @@ func Confirm(label string) (bool, error) {
 	return value == "yes", nil
 }
 
+func fitSelectOptionsToWidth(options []Option) []Option {
+	if len(options) == 0 {
+		return nil
+	}
+	maxLineWidth := terminalWidth() - 10
+	if maxLineWidth < 24 {
+		maxLineWidth = 24
+	}
+	labelWidth := maxLineWidth
+	if labelWidth > 36 {
+		labelWidth = 36
+	}
+	if labelWidth < 12 {
+		labelWidth = 12
+	}
+
+	fitted := make([]Option, len(options))
+	for i, option := range options {
+		fitted[i] = option
+		if option.Description == "" {
+			fitted[i].Label = truncate(option.Label, maxLineWidth)
+			continue
+		}
+		descriptionWidth := maxLineWidth - labelWidth - 1
+		if descriptionWidth < 8 {
+			descriptionWidth = 8
+			labelWidth = maxLineWidth - descriptionWidth - 1
+		}
+		fitted[i].Label = truncate(option.Label, labelWidth)
+		fitted[i].Description = truncate(option.Description, descriptionWidth)
+	}
+	return fitted
+}
+
 func normalizePromptError(err error) error {
 	if err == nil {
 		return nil
@@ -102,4 +139,42 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func terminalWidth() int {
+	if raw := os.Getenv("COLUMNS"); raw != "" {
+		if width, err := strconv.Atoi(raw); err == nil && width > 0 {
+			return width
+		}
+	}
+	widths := []int{}
+	for _, file := range []*os.File{os.Stdout, os.Stderr, os.Stdin} {
+		if file == nil {
+			continue
+		}
+		if width, _, err := term.GetSize(int(file.Fd())); err == nil && width > 0 {
+			widths = append(widths, width)
+		}
+	}
+	if len(widths) > 0 {
+		width := widths[0]
+		for _, candidate := range widths[1:] {
+			if candidate < width {
+				width = candidate
+			}
+		}
+		return width
+	}
+	return 80
+}
+
+func truncate(value string, width int) string {
+	if width <= 0 || len([]rune(value)) <= width {
+		return value
+	}
+	if width <= 3 {
+		return string([]rune(value)[:width])
+	}
+	runes := []rune(value)
+	return string(runes[:width-3]) + "..."
 }

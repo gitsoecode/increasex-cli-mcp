@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/jessevaughan/increasex/internal/util"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ func newBalanceCmd(ctx *Context) *cobra.Command {
 				}
 				accountID, err = chooseAccount(accounts, "Select an account")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			if accountID == "" {

@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/jessevaughan/increasex/internal/config"
+import "github.com/gitsoecode/increasex-cli-mcp/internal/config"
 
 type StoredCredential struct {
 	Token  string

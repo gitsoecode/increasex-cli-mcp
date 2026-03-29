@@ -19,7 +19,13 @@ type ErrorDetail struct {
 	Code      string         `json:"code"`
 	Message   string         `json:"message"`
 	Details   map[string]any `json:"details,omitempty"`
+	Fields    []FieldError   `json:"fields,omitempty"`
 	Retryable bool           `json:"retryable,omitempty"`
+}
+
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
 }
 
 func (e *ErrorDetail) Error() string {

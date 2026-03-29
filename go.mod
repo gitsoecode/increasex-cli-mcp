@@ -1,4 +1,4 @@
-module github.com/jessevaughan/increasex
+module github.com/gitsoecode/increasex-cli-mcp
 
 go 1.26.1
 

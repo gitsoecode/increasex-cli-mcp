@@ -10,8 +10,8 @@ import (
 
 	increase "github.com/Increase/increase-go"
 	"github.com/Increase/increase-go/option"
-	"github.com/jessevaughan/increasex/internal/config"
-	"github.com/jessevaughan/increasex/internal/util"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
 
 type Client struct {
@@ -56,29 +56,53 @@ func WrapError(err error) *util.ErrorDetail {
 	if err == nil {
 		return nil
 	}
+	var detailErr *util.ErrorDetail
+	if errors.As(err, &detailErr) {
+		return detailErr
+	}
 	var apiErr *increase.Error
 	if errors.As(err, &apiErr) {
 		details := map[string]any{
 			"type":   string(apiErr.Type),
 			"reason": string(apiErr.Reason),
 		}
+		fields := make([]util.FieldError, 0, len(apiErr.Errors))
 		if apiErr.Detail != "" {
 			details["detail"] = apiErr.Detail
 		}
+		for _, item := range apiErr.Errors {
+			field := ""
+			if rawField, ok := item["field"].(string); ok {
+				field = rawField
+			}
+			message := ""
+			if rawMessage, ok := item["message"].(string); ok {
+				message = rawMessage
+			}
+			if field == "" && message == "" {
+				continue
+			}
+			fields = append(fields, util.FieldError{Field: field, Message: message})
+		}
+		var wrapped *util.ErrorDetail
 		switch apiErr.Status {
 		case increase.ErrorStatus401, increase.ErrorStatus403:
-			return util.NewError(util.CodeAuthError, apiErr.Title, details, false)
+			wrapped = util.NewError(util.CodeAuthError, apiErr.Title, details, false)
 		case increase.ErrorStatus404:
-			return util.NewError(util.CodeNotFound, apiErr.Title, details, false)
+			wrapped = util.NewError(util.CodeNotFound, apiErr.Title, details, false)
 		case increase.ErrorStatus409:
-			return util.NewError(util.CodeIdempotencyConflict, apiErr.Title, details, false)
+			wrapped = util.NewError(util.CodeIdempotencyConflict, apiErr.Title, details, false)
 		case increase.ErrorStatus429:
-			return util.NewError(util.CodeRateLimited, apiErr.Title, details, true)
+			wrapped = util.NewError(util.CodeRateLimited, apiErr.Title, details, true)
 		case increase.ErrorStatus400:
-			return util.NewError(util.CodeValidationError, apiErr.Title, details, false)
+			wrapped = util.NewError(util.CodeValidationError, apiErr.Title, details, false)
 		default:
-			return util.NewError(util.CodeAPIError, apiErr.Title, details, apiErr.Status >= 500)
+			wrapped = util.NewError(util.CodeAPIError, apiErr.Title, details, apiErr.Status >= 500)
 		}
+		if len(fields) > 0 {
+			wrapped.Fields = fields
+		}
+		return wrapped
 	}
 
 	var netErr net.Error
@@ -118,6 +142,81 @@ func (c *Client) GetBalance(ctx context.Context, accountID string) (APIResult[*i
 	return APIResult[*increase.BalanceLookup]{Data: balance, RequestID: requestIDFrom(resp)}, nil
 }
 
+func (c *Client) ListPrograms(ctx context.Context, params increase.ProgramListParams) (APIResult[[]increase.Program], error) {
+	var resp *http.Response
+	page, err := c.raw.Programs.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.Program]{}, err
+	}
+	return APIResult[[]increase.Program]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetProgram(ctx context.Context, programID string) (APIResult[*increase.Program], error) {
+	var resp *http.Response
+	program, err := c.raw.Programs.Get(ctx, programID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.Program]{}, err
+	}
+	return APIResult[*increase.Program]{Data: program, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListDigitalCardProfiles(ctx context.Context, params increase.DigitalCardProfileListParams) (APIResult[[]increase.DigitalCardProfile], error) {
+	var resp *http.Response
+	page, err := c.raw.DigitalCardProfiles.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.DigitalCardProfile]{}, err
+	}
+	return APIResult[[]increase.DigitalCardProfile]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetDigitalCardProfile(ctx context.Context, digitalCardProfileID string) (APIResult[*increase.DigitalCardProfile], error) {
+	var resp *http.Response
+	profile, err := c.raw.DigitalCardProfiles.Get(ctx, digitalCardProfileID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.DigitalCardProfile]{}, err
+	}
+	return APIResult[*increase.DigitalCardProfile]{Data: profile, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListEvents(ctx context.Context, params increase.EventListParams) (APIResult[[]increase.Event], error) {
+	var resp *http.Response
+	page, err := c.raw.Events.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.Event]{}, err
+	}
+	return APIResult[[]increase.Event]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetEvent(ctx context.Context, eventID string) (APIResult[*increase.Event], error) {
+	var resp *http.Response
+	event, err := c.raw.Events.Get(ctx, eventID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.Event]{}, err
+	}
+	return APIResult[*increase.Event]{Data: event, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListDocuments(ctx context.Context, params DocumentListParams) (APIResult[[]Document], error) {
+	var resp *http.Response
+	var page documentListResponse
+	if err := c.raw.Get(ctx, "documents", params, &page, c.requestOptions("", &resp)...); err != nil {
+		return APIResult[[]Document]{}, err
+	}
+	return APIResult[[]Document]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetDocument(ctx context.Context, documentID string) (APIResult[*Document], error) {
+	if strings.TrimSpace(documentID) == "" {
+		return APIResult[*Document]{}, errors.New("missing required document_id parameter")
+	}
+	var resp *http.Response
+	var document Document
+	if err := c.raw.Get(ctx, "documents/"+documentID, nil, &document, c.requestOptions("", &resp)...); err != nil {
+		return APIResult[*Document]{}, err
+	}
+	return APIResult[*Document]{Data: &document, RequestID: requestIDFrom(resp)}, nil
+}
+
 func (c *Client) CloseAccount(ctx context.Context, accountID, idempotencyKey string) (APIResult[*increase.Account], error) {
 	var resp *http.Response
 	account, err := c.raw.Accounts.Close(ctx, accountID, c.requestOptions(idempotencyKey, &resp)...)
@@ -139,6 +238,33 @@ func (c *Client) CreateAccount(ctx context.Context, params increase.AccountNewPa
 func (c *Client) CreateAccountNumber(ctx context.Context, params increase.AccountNumberNewParams, idempotencyKey string) (APIResult[*increase.AccountNumber], error) {
 	var resp *http.Response
 	number, err := c.raw.AccountNumbers.New(ctx, params, c.requestOptions(idempotencyKey, &resp)...)
+	if err != nil {
+		return APIResult[*increase.AccountNumber]{}, err
+	}
+	return APIResult[*increase.AccountNumber]{Data: number, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) ListAccountNumbers(ctx context.Context, params increase.AccountNumberListParams) (APIResult[[]increase.AccountNumber], error) {
+	var resp *http.Response
+	page, err := c.raw.AccountNumbers.List(ctx, params, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[[]increase.AccountNumber]{}, err
+	}
+	return APIResult[[]increase.AccountNumber]{Data: page.Data, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) GetAccountNumber(ctx context.Context, accountNumberID string) (APIResult[*increase.AccountNumber], error) {
+	var resp *http.Response
+	number, err := c.raw.AccountNumbers.Get(ctx, accountNumberID, c.requestOptions("", &resp)...)
+	if err != nil {
+		return APIResult[*increase.AccountNumber]{}, err
+	}
+	return APIResult[*increase.AccountNumber]{Data: number, RequestID: requestIDFrom(resp)}, nil
+}
+
+func (c *Client) UpdateAccountNumber(ctx context.Context, accountNumberID string, params increase.AccountNumberUpdateParams, idempotencyKey string) (APIResult[*increase.AccountNumber], error) {
+	var resp *http.Response
+	number, err := c.raw.AccountNumbers.Update(ctx, accountNumberID, params, c.requestOptions(idempotencyKey, &resp)...)
 	if err != nil {
 		return APIResult[*increase.AccountNumber]{}, err
 	}
@@ -478,9 +604,13 @@ func (c *Client) CancelFedNowTransfer(ctx context.Context, transferID string) (A
 	return APIResult[*increase.FednowTransfer]{Data: transfer, RequestID: requestIDFrom(resp)}, nil
 }
 
-func ParseSince(value string) (time.Time, error) {
+func ParseRFC3339(value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, nil
 	}
 	return time.Parse(time.RFC3339, value)
+}
+
+func ParseSince(value string) (time.Time, error) {
+	return ParseRFC3339(value)
 }

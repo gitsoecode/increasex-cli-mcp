@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jessevaughan/increasex/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
 )
 
 func TestResolvePrefersExplicitThenEnvThenStoredProfile(t *testing.T) {

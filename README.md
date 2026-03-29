@@ -154,8 +154,10 @@ That sets shell environment variables for the current session only.
 If you already have stored credentials and want to load them into the current shell intentionally:
 
 ```bash
-eval "$(./increasex auth export)"
+eval "$(./increasex auth export --confirm)"
 ```
+
+`auth export` prints the raw API key to stdout before you `eval` it. Treat it as an intentional, secret-bearing escape hatch rather than the default auth path.
 
 ### Check Auth
 
@@ -164,7 +166,7 @@ eval "$(./increasex auth export)"
 ./increasex auth whoami
 ```
 
-`auth status` reports whether a durable file credential is available, whether a Keychain credential is available, and whether MCP is ready without needing shell exports.
+`auth status` reports whether a durable file credential is available, whether a Keychain credential is available, and whether MCP is ready without needing shell exports. `auth whoami` validates the current credential and shows the active profile, environment, token source, and resolved entity context without printing the API key.
 
 ### Log Out
 
@@ -233,9 +235,12 @@ List transactions:
 
 ```bash
 ./increasex transactions --account-id account_xxx
-./increasex transactions --account-id account_xxx --since 2026-03-01T00:00:00Z
+./increasex transactions --account-id account_xxx --period last-7d
+./increasex transactions --account-id account_xxx --since 2026-03-01T00:00:00Z --until 2026-03-15T23:59:59Z
 ./increasex transactions --account-id account_xxx --category account_transfer_intention
 ```
+
+When no time period is supplied, `transactions` defaults to the last 30 days.
 
 List cards:
 
@@ -314,6 +319,8 @@ Current interactive behavior includes:
 - searchable external-account selection
 - transfer approval queue selection
 - action selection after listing accounts
+- explicit Back and Exit options in nested interactive selectors
+- typed `back` and `exit` support in free-text prompts
 - confirmation selection before write execution
 
 If you want to force interactive prompts:
@@ -619,9 +626,19 @@ Read tools:
 
 - `list_accounts`
 - `resolve_account`
+- `list_account_numbers`
+- `retrieve_account_number`
+- `list_programs`
+- `retrieve_program`
 - `get_balance`
-- `list_recent_transactions`
+- `list_recent_transactions` with optional `since` and `until` RFC3339 bounds
+- `list_events`
+- `retrieve_event`
+- `list_documents`
+- `retrieve_document`
 - `list_cards`
+- `list_digital_card_profiles`
+- `retrieve_digital_card_profile`
 - `retrieve_card_details`
 - `retrieve_card_sensitive_details`
 - `create_card_details_iframe`
@@ -636,6 +653,17 @@ Write tools:
 - `create_account`
 - `close_account`
 - `create_account_number`
+- `disable_account_number`
+
+Example MCP transaction filter input:
+
+```json
+{
+  "account_id": "account_xxx",
+  "since": "2026-03-01T00:00:00Z",
+  "until": "2026-03-15T23:59:59Z"
+}
+```
 - `create_account_transfer`
 - `create_ach_transfer`
 - `create_real_time_payments_transfer`
@@ -649,6 +677,24 @@ Write tools:
 - `update_card_pin`
 
 Compatibility aliases still exist for the older `move_money_*` transfer tool names.
+
+The repository also includes operator-oriented local skills under [`skills/`](./skills) for guardrails, cash ops, account numbers and routing, money movement, approvals, and card workflows.
+
+### Install Skills
+
+If you want to install these skills into another Codex environment from GitHub, install the whole skill pack:
+
+```bash
+npx skills add --all https://github.com/gitsoecode/increasex-cli-mcp
+```
+
+Install a single skill from the repository:
+
+```bash
+npx skills add https://github.com/gitsoecode/increasex-cli-mcp --skill increasex-operator-guardrails
+```
+
+Restart Codex after installing new skills so they are picked up in a fresh session.
 
 ### MCP Write Pattern
 
@@ -727,7 +773,7 @@ GOCACHE=/tmp/increasex-gocache go build -o increasex ./cmd/increasex
 
 See also:
 
-- [docs/spec.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/spec.md)
-- [docs/parity_matrix.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/parity_matrix.md)
-- [docs/smoke_test_matrix.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/docs/smoke_test_matrix.md)
-- [AGENTS.md](/Users/jessevaughan/Projects/Increase_CLI_wrapper_MCP/AGENTS.md)
+- [docs/spec.md](./docs/spec.md)
+- [docs/parity_matrix.md](./docs/parity_matrix.md)
+- [docs/smoke_test_matrix.md](./docs/smoke_test_matrix.md)
+- [AGENTS.md](./AGENTS.md)

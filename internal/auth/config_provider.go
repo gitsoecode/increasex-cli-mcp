@@ -3,7 +3,7 @@ package auth
 import (
 	"time"
 
-	"github.com/jessevaughan/increasex/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
 )
 
 type FileStore struct{}

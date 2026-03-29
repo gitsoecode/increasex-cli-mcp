@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	increase "github.com/Increase/increase-go"
-	increasex "github.com/jessevaughan/increasex/internal/increase"
-	"github.com/jessevaughan/increasex/internal/util"
+	increasex "github.com/gitsoecode/increasex-cli-mcp/internal/increase"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
 
 func (s Services) ListExternalAccounts(ctx context.Context, api *increasex.Client, status, cursor string, limit int64) ([]ExternalAccountSummary, string, error) {
@@ -44,6 +44,9 @@ func (s Services) RetrieveExternalAccount(ctx context.Context, api *increasex.Cl
 }
 
 func (s Services) PreviewCreateExternalAccount(session Session, input CreateExternalAccountInput) (*PreviewResult, error) {
+	if err := validateCreateExternalAccountInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("create_external_account", session, effective)
 	if err != nil {
@@ -58,6 +61,9 @@ func (s Services) PreviewCreateExternalAccount(session Session, input CreateExte
 }
 
 func (s Services) ExecuteCreateExternalAccount(ctx context.Context, api *increasex.Client, session Session, input CreateExternalAccountInput) (any, string, error) {
+	if err := validateCreateExternalAccountInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "create_external_account", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
@@ -83,6 +89,9 @@ func (s Services) ExecuteCreateExternalAccount(ctx context.Context, api *increas
 }
 
 func (s Services) PreviewUpdateExternalAccount(session Session, input UpdateExternalAccountInput) (*PreviewResult, error) {
+	if err := validateUpdateExternalAccountInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("update_external_account", session, effective)
 	if err != nil {
@@ -97,6 +106,9 @@ func (s Services) PreviewUpdateExternalAccount(session Session, input UpdateExte
 }
 
 func (s Services) ExecuteUpdateExternalAccount(ctx context.Context, api *increasex.Client, session Session, input UpdateExternalAccountInput) (any, string, error) {
+	if err := validateUpdateExternalAccountInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "update_external_account", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
@@ -664,4 +676,102 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func validateCreateExternalAccountInput(input CreateExternalAccountInput) error {
+	fields := []util.FieldError{}
+	if strings.TrimSpace(input.Description) == "" {
+		fields = append(fields, util.FieldError{Field: "description", Message: "is required"})
+	}
+	if strings.TrimSpace(input.RoutingNumber) == "" {
+		fields = append(fields, util.FieldError{Field: "routing_number", Message: "is required"})
+	}
+	if strings.TrimSpace(input.AccountNumber) == "" {
+		fields = append(fields, util.FieldError{Field: "account_number", Message: "is required"})
+	}
+	if value := strings.TrimSpace(input.AccountHolder); value != "" && !isAllowedValue(value, []string{"business", "individual", "unknown"}) {
+		fields = append(fields, util.FieldError{Field: "account_holder", Message: "expected one of business, individual, or unknown"})
+	}
+	if value := strings.TrimSpace(input.Funding); value != "" && !isAllowedValue(value, []string{"checking", "savings", "general_ledger", "other"}) {
+		fields = append(fields, util.FieldError{Field: "funding", Message: "expected one of checking, savings, general_ledger, or other"})
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please correct the highlighted external account fields.",
+		Fields:  fields,
+	}
+}
+
+func validateUpdateExternalAccountInput(input UpdateExternalAccountInput) error {
+	fields := []util.FieldError{}
+	if strings.TrimSpace(input.ExternalAccountID) == "" {
+		fields = append(fields, util.FieldError{Field: "external_account_id", Message: "is required"})
+	}
+	if value := strings.TrimSpace(input.AccountHolder); value != "" && !isAllowedValue(value, []string{"business", "individual"}) {
+		fields = append(fields, util.FieldError{Field: "account_holder", Message: "expected one of business or individual"})
+	}
+	if value := strings.TrimSpace(input.Funding); value != "" && !isAllowedValue(value, []string{"checking", "savings", "general_ledger", "other"}) {
+		fields = append(fields, util.FieldError{Field: "funding", Message: "expected one of checking, savings, general_ledger, or other"})
+	}
+	if value := strings.TrimSpace(input.Status); value != "" && !isAllowedValue(value, []string{"active", "archived"}) {
+		fields = append(fields, util.FieldError{Field: "status", Message: "expected one of active or archived"})
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please correct the highlighted external account fields.",
+		Fields:  fields,
+	}
+}
+
+func validateCreateCardInput(input CreateCardInput) error {
+	fields := []util.FieldError{}
+	if strings.TrimSpace(input.AccountID) == "" {
+		fields = append(fields, util.FieldError{Field: "account_id", Message: "is required"})
+	}
+	if len(strings.TrimSpace(input.Description)) > 200 {
+		fields = append(fields, util.FieldError{Field: "description", Message: "must be 200 characters or fewer"})
+	}
+	if input.BillingAddress != nil {
+		if strings.TrimSpace(input.BillingAddress.Line1) == "" {
+			fields = append(fields, util.FieldError{Field: "billing_address.line1", Message: "is required"})
+		}
+		if strings.TrimSpace(input.BillingAddress.City) == "" {
+			fields = append(fields, util.FieldError{Field: "billing_address.city", Message: "is required"})
+		}
+		if strings.TrimSpace(input.BillingAddress.State) == "" {
+			fields = append(fields, util.FieldError{Field: "billing_address.state", Message: "is required"})
+		}
+		if strings.TrimSpace(input.BillingAddress.PostalCode) == "" {
+			fields = append(fields, util.FieldError{Field: "billing_address.postal_code", Message: "is required"})
+		}
+	}
+	if input.DigitalWallet != nil &&
+		strings.TrimSpace(input.DigitalWallet.Email) == "" &&
+		strings.TrimSpace(input.DigitalWallet.Phone) == "" &&
+		strings.TrimSpace(input.DigitalWallet.DigitalCardProfileID) == "" {
+		fields = append(fields, util.FieldError{Field: "digital_wallet", Message: "provide email, phone, or digital_card_profile_id"})
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please correct the highlighted card fields.",
+		Fields:  fields,
+	}
+}
+
+func isAllowedValue(value string, allowed []string) bool {
+	for _, option := range allowed {
+		if value == option {
+			return true
+		}
+	}
+	return false
 }

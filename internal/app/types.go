@@ -18,6 +18,58 @@ type AccountSummary struct {
 	CreatedAt             string `json:"created_at,omitempty"`
 }
 
+type AccountNumberSummary struct {
+	ID                  string              `json:"id"`
+	AccountID           string              `json:"account_id"`
+	AccountName         string              `json:"account_name,omitempty"`
+	Name                string              `json:"name"`
+	RoutingNumber       string              `json:"routing_number,omitempty"`
+	AccountNumberMasked string              `json:"account_number_masked,omitempty"`
+	Status              string              `json:"status,omitempty"`
+	CreatedAt           string              `json:"created_at,omitempty"`
+	InboundACH          *InboundACHInput    `json:"inbound_ach,omitempty"`
+	InboundChecks       *InboundChecksInput `json:"inbound_checks,omitempty"`
+}
+
+type AccountNumberDetails struct {
+	AccountNumberSummary
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	AccountNumber  string `json:"account_number,omitempty"`
+}
+
+type ProgramSummary struct {
+	ID                          string `json:"id"`
+	Name                        string `json:"name"`
+	Bank                        string `json:"bank"`
+	BillingAccountID            string `json:"billing_account_id,omitempty"`
+	DefaultDigitalCardProfileID string `json:"default_digital_card_profile_id,omitempty"`
+	InterestRate                string `json:"interest_rate,omitempty"`
+	MaximumExtendableCredit     int64  `json:"maximum_extendable_credit,omitempty"`
+	CreatedAt                   string `json:"created_at,omitempty"`
+	UpdatedAt                   string `json:"updated_at,omitempty"`
+}
+
+type DigitalCardProfileTextColorSummary struct {
+	Red   int64 `json:"red"`
+	Green int64 `json:"green"`
+	Blue  int64 `json:"blue"`
+}
+
+type DigitalCardProfileSummary struct {
+	ID                    string                             `json:"id"`
+	Description           string                             `json:"description"`
+	CardDescription       string                             `json:"card_description,omitempty"`
+	IssuerName            string                             `json:"issuer_name,omitempty"`
+	Status                string                             `json:"status,omitempty"`
+	AppIconFileID         string                             `json:"app_icon_file_id,omitempty"`
+	BackgroundImageFileID string                             `json:"background_image_file_id,omitempty"`
+	ContactEmail          string                             `json:"contact_email,omitempty"`
+	ContactPhone          string                             `json:"contact_phone,omitempty"`
+	ContactWebsite        string                             `json:"contact_website,omitempty"`
+	TextColor             DigitalCardProfileTextColorSummary `json:"text_color"`
+	CreatedAt             string                             `json:"created_at,omitempty"`
+}
+
 type BalanceSummary struct {
 	AccountID        string `json:"account_id"`
 	CurrentBalance   int64  `json:"current_balance"`
@@ -35,6 +87,56 @@ type TransactionSummary struct {
 	RouteID             string `json:"route_id,omitempty"`
 	RouteType           string `json:"route_type,omitempty"`
 	CounterpartySummary string `json:"counterparty_summary,omitempty"`
+}
+
+type EventSummary struct {
+	ID                   string `json:"id"`
+	AssociatedObjectID   string `json:"associated_object_id,omitempty"`
+	AssociatedObjectType string `json:"associated_object_type,omitempty"`
+	Category             string `json:"category"`
+	CreatedAt            string `json:"created_at,omitempty"`
+}
+
+type TransactionTimeRangeInput struct {
+	Since  string `json:"since,omitempty"`
+	Until  string `json:"until,omitempty"`
+	Period string `json:"period,omitempty"`
+}
+
+type ListTransactionsInput struct {
+	AccountID  string                    `json:"account_id,omitempty"`
+	TimeRange  TransactionTimeRangeInput `json:"time_range,omitempty"`
+	Cursor     string                    `json:"cursor,omitempty"`
+	Limit      int64                     `json:"limit,omitempty"`
+	Categories []string                  `json:"categories,omitempty"`
+}
+
+type ListEventsInput struct {
+	AssociatedObjectID string                    `json:"associated_object_id,omitempty"`
+	TimeRange          TransactionTimeRangeInput `json:"time_range,omitempty"`
+	Cursor             string                    `json:"cursor,omitempty"`
+	Limit              int64                     `json:"limit,omitempty"`
+	Categories         []string                  `json:"categories,omitempty"`
+}
+
+type DocumentSummary struct {
+	ID                        string         `json:"id"`
+	Category                  string         `json:"category"`
+	EntityID                  string         `json:"entity_id,omitempty"`
+	FileID                    string         `json:"file_id,omitempty"`
+	IdempotencyKey            string         `json:"idempotency_key,omitempty"`
+	CreatedAt                 string         `json:"created_at,omitempty"`
+	AccountVerificationLetter map[string]any `json:"account_verification_letter,omitempty"`
+	FundingInstructions       map[string]any `json:"funding_instructions,omitempty"`
+}
+
+type ListDocumentsInput struct {
+	EntityID       string                    `json:"entity_id,omitempty"`
+	TimeRange      TransactionTimeRangeInput `json:"time_range,omitempty"`
+	Cursor         string                    `json:"cursor,omitempty"`
+	Limit          int64                     `json:"limit,omitempty"`
+	Categories     []string                  `json:"categories,omitempty"`
+	IdempotencyKey string                    `json:"idempotency_key,omitempty"`
 }
 
 type CardSummary struct {
@@ -95,6 +197,13 @@ type InboundACHInput struct {
 
 type InboundChecksInput struct {
 	Status string `json:"status"`
+}
+
+type DisableAccountNumberInput struct {
+	AccountNumberID   string `json:"account_number_id"`
+	IdempotencyKey    string `json:"idempotency_key,omitempty"`
+	DryRun            *bool  `json:"dry_run,omitempty"`
+	ConfirmationToken string `json:"confirmation_token,omitempty"`
 }
 
 type MoveMoneyInternalInput struct {
@@ -203,6 +312,7 @@ type WireTransferInput struct {
 	AmountCents             int64  `json:"amount_cents"`
 	BeneficiaryName         string `json:"beneficiary_name"`
 	MessageToRecipient      string `json:"message_to_recipient"`
+	SourceAccountNumberID   string `json:"source_account_number_id,omitempty"`
 	AccountNumber           string `json:"account_number,omitempty"`
 	RoutingNumber           string `json:"routing_number,omitempty"`
 	ExternalAccountID       string `json:"external_account_id,omitempty"`

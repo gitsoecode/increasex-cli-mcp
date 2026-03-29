@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/jessevaughan/increasex/internal/app"
-	"github.com/jessevaughan/increasex/internal/ui"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/app"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -34,35 +34,38 @@ func newExternalAccountsCmd(ctx *Context) *cobra.Command {
 				{Label: "Retrieve an external account", Value: "retrieve"},
 				{Label: "Create an external account", Value: "create"},
 				{Label: "Update an external account", Value: "update"},
-				{Label: "Back", Value: "back"},
 			}
 			if len(accounts) == 0 {
 				options = []ui.Option{
 					{Label: "Create an external account", Value: "create"},
-					{Label: "Back", Value: "back"},
 				}
 			}
-			action, err := ui.PromptSelect("External account actions", options)
-			if err != nil {
-				return err
-			}
-			switch action {
-			case "retrieve":
+			for {
+				action, err := promptSelectNavigation("External account actions", options, navBack, navExit)
+				if err != nil {
+					return bubbleNavigation(cmd, err)
+				}
+				if action == "create" {
+					return invokeCommand(cmd, newExternalAccountsCreateCmd(ctx))
+				}
+				if len(accounts) == 0 {
+					return nil
+				}
 				selected, err := chooseExternalAccount(accounts, "Select an external account")
 				if err != nil {
-					return err
+					if isNavigateBack(err) {
+						continue
+					}
+					return bubbleNavigation(cmd, err)
 				}
-				return invokeCommand(cmd, newExternalAccountsRetrieveCmd(ctx), "--external-account-id", selected)
-			case "create":
-				return invokeCommand(cmd, newExternalAccountsCreateCmd(ctx))
-			case "update":
-				selected, err := chooseExternalAccount(accounts, "Select an external account")
-				if err != nil {
-					return err
+				switch action {
+				case "retrieve":
+					return invokeCommand(cmd, newExternalAccountsRetrieveCmd(ctx), "--external-account-id", selected)
+				case "update":
+					return invokeCommand(cmd, newExternalAccountsUpdateCmd(ctx), "--external-account-id", selected)
+				default:
+					return nil
 				}
-				return invokeCommand(cmd, newExternalAccountsUpdateCmd(ctx), "--external-account-id", selected)
-			default:
-				return nil
 			}
 		},
 	}
@@ -95,7 +98,7 @@ func newExternalAccountsRetrieveCmd(ctx *Context) *cobra.Command {
 				}
 				externalAccountID, err = chooseExternalAccount(accounts, "Select an external account")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			if externalAccountID == "" {
@@ -127,35 +130,8 @@ func newExternalAccountsCreateCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if isInteractiveRequested(ctx.Options) {
-				if input.Description == "" {
-					input.Description, err = ui.PromptString("Description", true)
-					if err != nil {
-						return err
-					}
-				}
-				if input.RoutingNumber == "" {
-					input.RoutingNumber, err = ui.PromptString("Routing number", true)
-					if err != nil {
-						return err
-					}
-				}
-				if input.AccountNumber == "" {
-					input.AccountNumber, err = ui.PromptString("Account number", true)
-					if err != nil {
-						return err
-					}
-				}
-				if input.AccountHolder == "" {
-					input.AccountHolder, err = ui.PromptString("Account holder (optional)", false)
-					if err != nil {
-						return err
-					}
-				}
-				if input.Funding == "" {
-					input.Funding, err = ui.PromptString("Funding (optional)", false)
-					if err != nil {
-						return err
-					}
+				if err := promptCreateExternalAccountInput(&input); err != nil {
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			input.DryRun = &dryRun
@@ -177,9 +153,9 @@ func newExternalAccountsCreateCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Create this external account?")
+					confirmed, err := promptConfirmationNavigation("Create this external account?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -217,39 +193,12 @@ func newExternalAccountsUpdateCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if isInteractiveRequested(ctx.Options) {
-				if input.ExternalAccountID == "" {
-					accounts, _, err := ctx.Services.ListExternalAccounts(cmd.Context(), api, "", "", 25)
-					if err != nil {
-						return err
-					}
-					input.ExternalAccountID, err = chooseExternalAccount(accounts, "Select an external account")
-					if err != nil {
-						return err
-					}
+				accounts, _, err := ctx.Services.ListExternalAccounts(cmd.Context(), api, "", "", 25)
+				if err != nil {
+					return err
 				}
-				if input.Description == "" {
-					input.Description, err = ui.PromptString("Updated description (optional)", false)
-					if err != nil {
-						return err
-					}
-				}
-				if input.AccountHolder == "" {
-					input.AccountHolder, err = ui.PromptString("Updated account holder (optional)", false)
-					if err != nil {
-						return err
-					}
-				}
-				if input.Funding == "" {
-					input.Funding, err = ui.PromptString("Updated funding (optional)", false)
-					if err != nil {
-						return err
-					}
-				}
-				if input.Status == "" {
-					input.Status, err = ui.PromptString("Updated status (optional)", false)
-					if err != nil {
-						return err
-					}
+				if err := promptUpdateExternalAccountInput(accounts, &input); err != nil {
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			input.DryRun = &dryRun
@@ -271,9 +220,9 @@ func newExternalAccountsUpdateCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Update this external account?")
+					confirmed, err := promptConfirmationNavigation("Update this external account?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -297,4 +246,198 @@ func newExternalAccountsUpdateCmd(ctx *Context) *cobra.Command {
 	cmd.Flags().StringVar(&input.ConfirmationToken, "confirmation-token", "", "confirmation token")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview only")
 	return cmd
+}
+
+func promptOptionalExternalAccountHolderCreate() (string, error) {
+	return promptOptionalSelect("Account holder (optional)", []ui.Option{
+		{Label: "Business", Value: "business"},
+		{Label: "Individual", Value: "individual"},
+		{Label: "Unknown", Value: "unknown"},
+	})
+}
+
+func promptOptionalExternalAccountHolderUpdate() (string, error) {
+	return promptOptionalSelect("Updated account holder (optional)", []ui.Option{
+		{Label: "Business", Value: "business"},
+		{Label: "Individual", Value: "individual"},
+	})
+}
+
+func promptOptionalExternalAccountFunding() (string, error) {
+	return promptOptionalSelect("Funding (optional)", []ui.Option{
+		{Label: "Checking", Value: "checking"},
+		{Label: "Savings", Value: "savings"},
+		{Label: "General ledger", Value: "general_ledger"},
+		{Label: "Other", Value: "other"},
+	})
+}
+
+func promptOptionalExternalAccountStatus() (string, error) {
+	return promptOptionalSelect("Updated status (optional)", []ui.Option{
+		{Label: "Active", Value: "active"},
+		{Label: "Archived", Value: "archived"},
+	})
+}
+
+func promptOptionalSelect(label string, options []ui.Option) (string, error) {
+	items := append([]ui.Option{{Label: "Skip", Value: "", Description: "Leave this unset"}}, options...)
+	return promptSelectNavigation(label, items, navBack, navExit)
+}
+
+func promptCreateExternalAccountInput(input *app.CreateExternalAccountInput) error {
+	step := 0
+	for step < 5 {
+		switch step {
+		case 0:
+			if input.Description != "" {
+				step++
+				continue
+			}
+			value, err := promptStringNavigation("Description", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					return err
+				}
+				return err
+			}
+			input.Description = value
+		case 1:
+			if input.RoutingNumber != "" {
+				step++
+				continue
+			}
+			value, err := promptStringNavigation("Routing number", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.RoutingNumber = value
+		case 2:
+			if input.AccountNumber != "" {
+				step++
+				continue
+			}
+			value, err := promptStringNavigation("Account number", true)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.AccountNumber = value
+		case 3:
+			if input.AccountHolder != "" {
+				step++
+				continue
+			}
+			value, err := promptOptionalExternalAccountHolderCreate()
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.AccountHolder = value
+		case 4:
+			if input.Funding != "" {
+				step++
+				continue
+			}
+			value, err := promptOptionalExternalAccountFunding()
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.Funding = value
+		}
+		step++
+	}
+	return nil
+}
+
+func promptUpdateExternalAccountInput(accounts []app.ExternalAccountSummary, input *app.UpdateExternalAccountInput) error {
+	step := 0
+	for step < 5 {
+		switch step {
+		case 0:
+			if input.ExternalAccountID != "" {
+				step++
+				continue
+			}
+			value, err := chooseExternalAccount(accounts, "Select an external account")
+			if err != nil {
+				if isNavigateBack(err) {
+					return err
+				}
+				return err
+			}
+			input.ExternalAccountID = value
+		case 1:
+			if input.Description != "" {
+				step++
+				continue
+			}
+			value, err := promptStringNavigation("Updated description (optional)", false)
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.Description = value
+		case 2:
+			if input.AccountHolder != "" {
+				step++
+				continue
+			}
+			value, err := promptOptionalExternalAccountHolderUpdate()
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.AccountHolder = value
+		case 3:
+			if input.Funding != "" {
+				step++
+				continue
+			}
+			value, err := promptOptionalExternalAccountFunding()
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.Funding = value
+		case 4:
+			if input.Status != "" {
+				step++
+				continue
+			}
+			value, err := promptOptionalExternalAccountStatus()
+			if err != nil {
+				if isNavigateBack(err) {
+					step = max(0, step-1)
+					continue
+				}
+				return err
+			}
+			input.Status = value
+		}
+		step++
+	}
+	return nil
 }

@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/jessevaughan/increasex/internal/app"
-	"github.com/jessevaughan/increasex/internal/ui"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/app"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -29,84 +29,96 @@ func newAccountsCmd(ctx *Context) *cobra.Command {
 			}
 			printAccounts(accounts)
 			if isInteractiveRequested(ctx.Options) {
-				options := []ui.Option{
-					{Label: "Inspect an account", Value: "inspect"},
-					{Label: "Create an account", Value: "create"},
-					{Label: "Back", Value: "back"},
-				}
-				if len(accounts) == 0 {
-					options = []ui.Option{
+				for {
+					options := []ui.Option{
+						{Label: "Inspect an account", Value: "inspect"},
 						{Label: "Create an account", Value: "create"},
-						{Label: "Back", Value: "back"},
 					}
-				}
-				action, err := ui.PromptSelect("Accounts menu", options)
-				if err != nil {
-					return err
-				}
-				switch action {
-				case "create":
-					return invokeCommand(cmd, newAccountsCreateCmd(ctx))
-				case "back":
-					return nil
-				}
-				if len(accounts) == 0 {
-					return nil
-				}
-				accountID, err := chooseAccount(accounts, "Select an account")
-				if err != nil {
-					return err
-				}
-				action, err = ui.PromptSelect("Choose action", []ui.Option{
-					{Label: "Get balance", Value: "balance"},
-					{Label: "Recent transactions", Value: "transactions"},
-					{Label: "Create account number", Value: "create_number"},
-					{Label: "Close account", Value: "close"},
-					{Label: "Back", Value: "back"},
-				})
-				if err != nil {
-					return err
-				}
-				switch action {
-				case "balance":
-					balance, _, err := ctx.Services.GetBalance(cmd.Context(), api, accountID)
+					if len(accounts) == 0 {
+						options = []ui.Option{
+							{Label: "Create an account", Value: "create"},
+						}
+					}
+					action, err := promptSelectNavigation("Accounts menu", options, navBack, navExit)
 					if err != nil {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
-					printKeyValues(map[string]any{
-						"account_id":        balance.AccountID,
-						"current_balance":   balance.CurrentBalance,
-						"available_balance": balance.AvailableBalance,
-					})
-				case "transactions":
-					items, _, err := ctx.Services.ListRecentTransactions(cmd.Context(), api, accountID, "", "", 10, nil)
+					if action == "create" {
+						return invokeCommand(cmd, newAccountsCreateCmd(ctx))
+					}
+					if len(accounts) == 0 {
+						return nil
+					}
+					accountID, err := chooseAccount(accounts, "Select an account")
 					if err != nil {
-						return err
+						if isNavigateBack(err) {
+							continue
+						}
+						return bubbleNavigation(cmd, err)
 					}
-					printTransactions(items)
-				case "create_number":
-					name, err := ui.PromptString("Account number name", true)
-					if err != nil {
-						return err
+					for {
+						action, err = promptSelectNavigation("Choose action", []ui.Option{
+							{Label: "Get balance", Value: "balance"},
+							{Label: "Recent transactions", Value: "transactions"},
+							{Label: "Create account number", Value: "create_number"},
+							{Label: "Close account", Value: "close"},
+						}, navBack, navExit)
+						if err != nil {
+							if isNavigateBack(err) {
+								break
+							}
+							return bubbleNavigation(cmd, err)
+						}
+						switch action {
+						case "balance":
+							balance, _, err := ctx.Services.GetBalance(cmd.Context(), api, accountID)
+							if err != nil {
+								return err
+							}
+							printKeyValues(map[string]any{
+								"account_id":        balance.AccountID,
+								"current_balance":   balance.CurrentBalance,
+								"available_balance": balance.AvailableBalance,
+							})
+							return nil
+						case "transactions":
+							items, _, err := ctx.Services.ListRecentTransactions(cmd.Context(), api, app.ListTransactionsInput{
+								AccountID: accountID,
+								Limit:     10,
+							})
+							if err != nil {
+								return err
+							}
+							printTransactions(items)
+							return nil
+						case "create_number":
+							name, err := promptStringNavigation("Account number name", true)
+							if err != nil {
+								if isNavigateBack(err) {
+									continue
+								}
+								return bubbleNavigation(cmd, err)
+							}
+							preview, err := ctx.Services.PreviewCreateAccountNumber(*session, app.CreateAccountNumberInput{
+								AccountID: accountID,
+								Name:      name,
+							})
+							if err != nil {
+								return err
+							}
+							printPreview(preview)
+							return nil
+						case "close":
+							preview, err := ctx.Services.PreviewCloseAccount(*session, app.CloseAccountInput{
+								AccountID: accountID,
+							})
+							if err != nil {
+								return err
+							}
+							printPreview(preview)
+							return nil
+						}
 					}
-					preview, err := ctx.Services.PreviewCreateAccountNumber(*session, app.CreateAccountNumberInput{
-						AccountID: accountID,
-						Name:      name,
-					})
-					if err != nil {
-						return err
-					}
-					printPreview(preview)
-				case "close":
-					preview, err := ctx.Services.PreviewCloseAccount(*session, app.CloseAccountInput{
-						AccountID: accountID,
-					})
-					if err != nil {
-						return err
-					}
-					printPreview(preview)
-				case "back":
-					return nil
 				}
 			}
 			return nil
@@ -135,9 +147,9 @@ func newAccountsCreateCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if input.Name == "" && isInteractiveRequested(ctx.Options) {
-				value, err := ui.PromptString("Account name", true)
+				value, err := promptStringNavigation("Account name", true)
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 				input.Name = value
 			}
@@ -160,9 +172,9 @@ func newAccountsCreateCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Create this account?")
+					confirmed, err := promptConfirmationNavigation("Create this account?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -218,9 +230,9 @@ func newAccountsCloseCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Close this account?")
+					confirmed, err := promptConfirmationNavigation("Close this account?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -279,9 +291,9 @@ func newAccountsCreateNumberCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Create this account number?")
+					confirmed, err := promptConfirmationNavigation("Create this account number?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken

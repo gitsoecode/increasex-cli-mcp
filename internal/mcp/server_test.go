@@ -7,7 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jessevaughan/increasex/internal/app"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/app"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
 
 func TestReadFrameAcceptsCanonicalContentLengthHeader(t *testing.T) {
@@ -260,6 +261,18 @@ func TestToolsExposeNewParitySurface(t *testing.T) {
 
 	expected := []string{
 		"describe_capabilities",
+		"list_account_numbers",
+		"retrieve_account_number",
+		"retrieve_account_number_sensitive_details",
+		"disable_account_number",
+		"list_programs",
+		"retrieve_program",
+		"list_digital_card_profiles",
+		"retrieve_digital_card_profile",
+		"list_events",
+		"retrieve_event",
+		"list_documents",
+		"retrieve_document",
 		"list_external_accounts",
 		"retrieve_external_account",
 		"create_external_account",
@@ -281,5 +294,154 @@ func TestToolsExposeNewParitySurface(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, "describe_capabilities,") {
 		t.Fatalf("tools() should start with describe_capabilities, got %q", got)
+	}
+}
+
+func TestTransferCreateToolsDescribeQueueMode(t *testing.T) {
+	server := &Server{}
+	tools := server.tools()
+
+	descriptions := map[string]string{}
+	for _, tool := range tools {
+		descriptions[tool.Name] = tool.Description
+	}
+
+	for _, name := range []string{
+		"create_account_transfer",
+		"create_ach_transfer",
+		"create_real_time_payments_transfer",
+		"create_fednow_transfer",
+		"create_wire_transfer",
+	} {
+		description := descriptions[name]
+		if !strings.Contains(description, "require_approval=true") {
+			t.Fatalf("%s description = %q, want require_approval guidance", name, description)
+		}
+		if !strings.Contains(description, "queue for approval") {
+			t.Fatalf("%s description = %q, want queue-for-approval wording", name, description)
+		}
+	}
+}
+
+func TestListRecentTransactionsToolSupportsUntil(t *testing.T) {
+	server := &Server{}
+
+	for _, tool := range server.tools() {
+		if tool.Name != "list_recent_transactions" {
+			continue
+		}
+		properties, ok := tool.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("InputSchema.properties type = %T, want map[string]any", tool.InputSchema["properties"])
+		}
+		if _, ok := properties["until"]; !ok {
+			t.Fatal("list_recent_transactions input schema missing until")
+		}
+		return
+	}
+
+	t.Fatal("list_recent_transactions tool definition not found")
+}
+
+func TestNewReadToolsExposeExpectedFilters(t *testing.T) {
+	server := &Server{}
+
+	for _, tool := range server.tools() {
+		switch tool.Name {
+		case "list_digital_card_profiles":
+			properties, ok := tool.InputSchema["properties"].(map[string]any)
+			if !ok {
+				t.Fatalf("list_digital_card_profiles properties type = %T, want map[string]any", tool.InputSchema["properties"])
+			}
+			if _, ok := properties["idempotency_key"]; !ok {
+				t.Fatal("list_digital_card_profiles input schema missing idempotency_key")
+			}
+		case "list_events":
+			properties, ok := tool.InputSchema["properties"].(map[string]any)
+			if !ok {
+				t.Fatalf("list_events properties type = %T, want map[string]any", tool.InputSchema["properties"])
+			}
+			if _, ok := properties["categories"]; !ok {
+				t.Fatal("list_events input schema missing categories")
+			}
+			if _, ok := properties["until"]; !ok {
+				t.Fatal("list_events input schema missing until")
+			}
+		case "list_documents":
+			properties, ok := tool.InputSchema["properties"].(map[string]any)
+			if !ok {
+				t.Fatalf("list_documents properties type = %T, want map[string]any", tool.InputSchema["properties"])
+			}
+			if _, ok := properties["categories"]; !ok {
+				t.Fatal("list_documents input schema missing categories")
+			}
+			if _, ok := properties["idempotency_key"]; !ok {
+				t.Fatal("list_documents input schema missing idempotency_key")
+			}
+		}
+	}
+}
+
+func TestExternalTransferToolSchemasUseCorrectSourceIdentifiers(t *testing.T) {
+	server := &Server{}
+	toolsByName := map[string]toolDefinition{}
+	for _, tool := range server.tools() {
+		toolsByName[tool.Name] = tool
+	}
+
+	assertHasProperty := func(t *testing.T, toolName, property string) {
+		t.Helper()
+		properties, ok := toolsByName[toolName].InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s properties type = %T, want map[string]any", toolName, toolsByName[toolName].InputSchema["properties"])
+		}
+		if _, ok := properties[property]; !ok {
+			t.Fatalf("%s missing property %q", toolName, property)
+		}
+	}
+
+	assertMissingProperty := func(t *testing.T, toolName, property string) {
+		t.Helper()
+		properties, ok := toolsByName[toolName].InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s properties type = %T, want map[string]any", toolName, toolsByName[toolName].InputSchema["properties"])
+		}
+		if _, ok := properties[property]; ok {
+			t.Fatalf("%s should not expose property %q", toolName, property)
+		}
+	}
+
+	assertHasProperty(t, "create_ach_transfer", "account_id")
+	assertMissingProperty(t, "create_ach_transfer", "source_account_number_id")
+
+	for _, toolName := range []string{
+		"create_real_time_payments_transfer",
+		"create_fednow_transfer",
+		"create_wire_transfer",
+	} {
+		assertHasProperty(t, toolName, "source_account_number_id")
+	}
+	assertHasProperty(t, "create_fednow_transfer", "account_id")
+	assertHasProperty(t, "create_wire_transfer", "account_id")
+}
+
+func TestEnvelopePreservesStructuredFieldErrors(t *testing.T) {
+	result, isErr := envelope(nil, "req_123", &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: "Please correct the highlighted external account fields.",
+		Fields: []util.FieldError{
+			{Field: "account_holder", Message: "expected one of business, individual, or unknown"},
+		},
+	})
+
+	if !isErr {
+		t.Fatal("envelope() isErr = false, want true")
+	}
+	text := toJSONString(result)
+	if !strings.Contains(text, "\"fields\"") {
+		t.Fatalf("envelope() = %s, want structured field errors", text)
+	}
+	if !strings.Contains(text, "\"account_holder\"") {
+		t.Fatalf("envelope() = %s, want account_holder field detail", text)
 	}
 }

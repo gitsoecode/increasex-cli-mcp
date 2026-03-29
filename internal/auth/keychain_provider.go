@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/jessevaughan/increasex/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
 )
 
 const keychainService = "increasex"

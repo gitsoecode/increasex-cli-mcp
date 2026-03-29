@@ -1,9 +1,16 @@
 package cli
 
 import (
-	"github.com/jessevaughan/increasex/internal/app"
-	"github.com/jessevaughan/increasex/internal/ui"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/app"
+	increasex "github.com/gitsoecode/increasex-cli-mcp/internal/increase"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/ui"
 	"github.com/spf13/cobra"
+)
+
+var (
+	promptCardString  = ui.PromptString
+	promptCardBool    = promptBool
+	selectCardAccount = chooseAccount
 )
 
 func newCardsCmd(ctx *Context) *cobra.Command {
@@ -34,47 +41,41 @@ func newCardsCmd(ctx *Context) *cobra.Command {
 				{Label: "Create details iframe", Value: "iframe"},
 				{Label: "Create a new card", Value: "create"},
 				{Label: "Update PIN", Value: "update_pin"},
-				{Label: "Back", Value: "back"},
 			}
 			if len(cards) == 0 {
 				actions = []ui.Option{
 					{Label: "Create a new card", Value: "create"},
-					{Label: "Back", Value: "back"},
 				}
 			}
-			action, err := ui.PromptSelect("Card actions", actions)
-			if err != nil {
-				return err
+			for {
+				action, err := promptSelectNavigation("Card actions", actions, navBack, navExit)
+				if err != nil {
+					return bubbleNavigation(cmd, err)
+				}
+				if action == "create" {
+					return invokeCommand(cmd, newCardsCreateCmd(ctx))
+				}
+				if len(cards) == 0 {
+					return nil
+				}
+				selected, err := chooseCard(cards, "Select a card")
+				if err != nil {
+					if isNavigateBack(err) {
+						continue
+					}
+					return bubbleNavigation(cmd, err)
+				}
+				switch action {
+				case "retrieve":
+					return invokeCommand(cmd, newCardsRetrieveCmd(ctx), "--card-id", selected)
+				case "details":
+					return invokeCommand(cmd, newCardsDetailsCmd(ctx), "--card-id", selected)
+				case "iframe":
+					return invokeCommand(cmd, newCardsCreateDetailsIframeCmd(ctx), "--card-id", selected)
+				case "update_pin":
+					return invokeCommand(cmd, newCardsUpdatePINCmd(ctx), "--card-id", selected)
+				}
 			}
-			switch action {
-			case "retrieve":
-				selected, err := chooseCard(cards, "Select a card")
-				if err != nil {
-					return err
-				}
-				return invokeCommand(cmd, newCardsRetrieveCmd(ctx), "--card-id", selected)
-			case "details":
-				selected, err := chooseCard(cards, "Select a card")
-				if err != nil {
-					return err
-				}
-				return invokeCommand(cmd, newCardsDetailsCmd(ctx), "--card-id", selected)
-			case "iframe":
-				selected, err := chooseCard(cards, "Select a card")
-				if err != nil {
-					return err
-				}
-				return invokeCommand(cmd, newCardsCreateDetailsIframeCmd(ctx), "--card-id", selected)
-			case "create":
-				return invokeCommand(cmd, newCardsCreateCmd(ctx))
-			case "update_pin":
-				selected, err := chooseCard(cards, "Select a card")
-				if err != nil {
-					return err
-				}
-				return invokeCommand(cmd, newCardsUpdatePINCmd(ctx), "--card-id", selected)
-			}
-			return nil
 		},
 	}
 	cmd.Flags().StringVar(&accountID, "account-id", "", "account id")
@@ -120,7 +121,7 @@ func newCardsRetrieveCmd(ctx *Context) *cobra.Command {
 				}
 				cardID, err = chooseCard(cards, "Select a card")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			card, requestID, err := ctx.Services.RetrieveCardDetails(cmd.Context(), api, cardID)
@@ -154,7 +155,7 @@ func newCardsDetailsCmd(ctx *Context) *cobra.Command {
 				}
 				cardID, err = chooseCard(cards, "Select a card")
 				if err != nil {
-					return err
+					return bubbleNavigation(cmd, err)
 				}
 			}
 			card, requestID, err := ctx.Services.RetrieveSensitiveCardDetails(cmd.Context(), api, cardID)
@@ -173,6 +174,7 @@ func newCardsDetailsCmd(ctx *Context) *cobra.Command {
 
 func newCardsCreateDetailsIframeCmd(ctx *Context) *cobra.Command {
 	var input app.CreateCardDetailsIframeInput
+	var openInBrowser bool
 	cmd := &cobra.Command{
 		Use:   "create-details-iframe",
 		Short: "Create a card details iframe",
@@ -186,15 +188,30 @@ func newCardsCreateDetailsIframeCmd(ctx *Context) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				input.CardID, err = chooseCard(cards, "Select a card")
-				if err != nil {
-					return err
-				}
-			}
-			if input.PhysicalCardID == "" && isInteractiveRequested(ctx.Options) {
-				input.PhysicalCardID, err = ui.PromptString("Physical card id (optional)", false)
-				if err != nil {
-					return err
+				step := 0
+				for step < 2 {
+					switch step {
+					case 0:
+						input.CardID, err = chooseCard(cards, "Select a card")
+						if err != nil {
+							return bubbleNavigation(cmd, err)
+						}
+					case 1:
+						if input.PhysicalCardID != "" {
+							step++
+							continue
+						}
+						input.PhysicalCardID, err = promptStringNavigation("Physical card id (optional)", false)
+						if err != nil {
+							if isNavigateBack(err) {
+								step = 0
+								input.CardID = ""
+								continue
+							}
+							return bubbleNavigation(cmd, err)
+						}
+					}
+					step++
 				}
 			}
 			data, requestID, err := ctx.Services.CreateCardDetailsIframe(cmd.Context(), api, input)
@@ -204,11 +221,18 @@ func newCardsCreateDetailsIframeCmd(ctx *Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return printJSON(data)
+			if err := printJSON(data); err != nil {
+				return err
+			}
+			if openInBrowser && !ctx.Options.JSON {
+				return openBrowserURL(data.IframeURL)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&input.CardID, "card-id", "", "card id")
 	cmd.Flags().StringVar(&input.PhysicalCardID, "physical-card-id", "", "physical card id")
+	cmd.Flags().BoolVar(&openInBrowser, "open", false, "open the iframe URL in your browser")
 	return cmd
 }
 
@@ -224,21 +248,41 @@ func newCardsUpdatePINCmd(ctx *Context) *cobra.Command {
 				return printEnvelopeJSON(nil, "", err)
 			}
 			if isInteractiveRequested(ctx.Options) {
+				step := 0
+				var cards []app.CardSummary
 				if input.CardID == "" {
-					cards, _, err := ctx.Services.ListCards(cmd.Context(), api, "", "", "", 25)
-					if err != nil {
-						return err
-					}
-					input.CardID, err = chooseCard(cards, "Select a card")
+					cards, _, err = ctx.Services.ListCards(cmd.Context(), api, "", "", "", 25)
 					if err != nil {
 						return err
 					}
 				}
-				if input.PIN == "" {
-					input.PIN, err = ui.PromptString("New PIN", true)
-					if err != nil {
-						return err
+				for step < 2 {
+					switch step {
+					case 0:
+						if input.CardID != "" {
+							step++
+							continue
+						}
+						input.CardID, err = chooseCard(cards, "Select a card")
+						if err != nil {
+							return bubbleNavigation(cmd, err)
+						}
+					case 1:
+						if input.PIN != "" {
+							step++
+							continue
+						}
+						input.PIN, err = promptStringNavigation("New PIN", true)
+						if err != nil {
+							if isNavigateBack(err) {
+								step = 0
+								input.CardID = ""
+								continue
+							}
+							return bubbleNavigation(cmd, err)
+						}
 					}
+					step++
 				}
 			}
 			input.DryRun = &dryRun
@@ -260,9 +304,9 @@ func newCardsUpdatePINCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Update this card PIN?")
+					confirmed, err := promptConfirmationNavigation("Update this card PIN?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -297,22 +341,15 @@ func newCardsCreateCmd(ctx *Context) *cobra.Command {
 			if err != nil {
 				return printEnvelopeJSON(nil, "", err)
 			}
-			if billingLine1 != "" || billingCity != "" || billingPostalCode != "" || billingState != "" {
-				input.BillingAddress = &app.BillingAddressInput{
-					City:       billingCity,
-					Line1:      billingLine1,
-					Line2:      billingLine2,
-					PostalCode: billingPostalCode,
-					State:      billingState,
+			billingAddress := cardBillingAddressFromFlags(billingCity, billingLine1, billingLine2, billingPostalCode, billingState)
+			digitalWallet := cardDigitalWalletFromFlags(walletEmail, walletPhone, walletProfileID)
+			if isInteractiveRequested(ctx.Options) {
+				if err := promptCreateCardInput(cmd, ctx, api, &input, &billingAddress, &digitalWallet); err != nil {
+					return err
 				}
 			}
-			if walletEmail != "" || walletPhone != "" || walletProfileID != "" {
-				input.DigitalWallet = &app.DigitalWalletInput{
-					DigitalCardProfileID: walletProfileID,
-					Email:                walletEmail,
-					Phone:                walletPhone,
-				}
-			}
+			input.BillingAddress = billingAddress
+			input.DigitalWallet = digitalWallet
 			input.DryRun = &dryRun
 			if dryRun {
 				preview, err := ctx.Services.PreviewCreateCard(*session, input)
@@ -332,9 +369,9 @@ func newCardsCreateCmd(ctx *Context) *cobra.Command {
 				}
 				if !ctx.Options.Yes {
 					printPreview(preview)
-					confirmed, err := ui.Confirm("Create this card?")
+					confirmed, err := promptConfirmationNavigation("Create this card?")
 					if err != nil || !confirmed {
-						return err
+						return bubbleNavigation(cmd, err)
 					}
 				}
 				input.ConfirmationToken = preview.ConfirmationToken
@@ -365,4 +402,143 @@ func newCardsCreateCmd(ctx *Context) *cobra.Command {
 	cmd.Flags().StringVar(&walletPhone, "wallet-phone", "", "digital wallet phone")
 	cmd.Flags().StringVar(&walletProfileID, "wallet-profile-id", "", "digital card profile id")
 	return cmd
+}
+
+func promptCreateCardInput(cmd *cobra.Command, ctx *Context, api *increasex.Client, input *app.CreateCardInput, billingAddress **app.BillingAddressInput, digitalWallet **app.DigitalWalletInput) error {
+	accounts, _, err := ctx.Services.ListAccounts(cmd.Context(), api, "open", 25, "")
+	if err != nil {
+		return err
+	}
+	return promptCreateCardFields(accounts, input, billingAddress, digitalWallet)
+}
+
+func promptCreateCardFields(accounts []app.AccountSummary, input *app.CreateCardInput, billingAddress **app.BillingAddressInput, digitalWallet **app.DigitalWalletInput) error {
+	var err error
+	if input.AccountID == "" {
+		input.AccountID, err = selectCardAccount(accounts, "Select source account")
+		if err != nil {
+			return err
+		}
+	}
+	if input.Description == "" {
+		input.Description, err = promptCardString("Description (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if input.CardProgram == "" {
+		input.CardProgram, err = promptCardString("Card program (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if input.EntityID == "" {
+		input.EntityID, err = promptCardString("Entity id (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if err := promptCardBillingAddressInput(billingAddress); err != nil {
+		return err
+	}
+	return promptCardDigitalWalletInput(digitalWallet)
+}
+
+func cardBillingAddressFromFlags(city, line1, line2, postalCode, state string) *app.BillingAddressInput {
+	if line1 != "" || city != "" || postalCode != "" || state != "" || line2 != "" {
+		return &app.BillingAddressInput{
+			City:       city,
+			Line1:      line1,
+			Line2:      line2,
+			PostalCode: postalCode,
+			State:      state,
+		}
+	}
+	return nil
+}
+
+func cardDigitalWalletFromFlags(email, phone, profileID string) *app.DigitalWalletInput {
+	if email != "" || phone != "" || profileID != "" {
+		return &app.DigitalWalletInput{
+			DigitalCardProfileID: profileID,
+			Email:                email,
+			Phone:                phone,
+		}
+	}
+	return nil
+}
+
+func promptCardBillingAddressInput(input **app.BillingAddressInput) error {
+	if *input == nil {
+		include, err := promptCardBool("Add billing address?", "Add billing address", "Skip billing address")
+		if err != nil || !include {
+			return err
+		}
+		*input = &app.BillingAddressInput{}
+	}
+	var err error
+	if (*input).Line1 == "" {
+		(*input).Line1, err = promptCardString("Billing address line 1", true)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).Line2 == "" {
+		(*input).Line2, err = promptCardString("Billing address line 2 (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).City == "" {
+		(*input).City, err = promptCardString("Billing city", true)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).State == "" {
+		(*input).State, err = promptCardString("Billing state", true)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).PostalCode == "" {
+		(*input).PostalCode, err = promptCardString("Billing postal code", true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func promptCardDigitalWalletInput(input **app.DigitalWalletInput) error {
+	if *input == nil {
+		include, err := promptCardBool("Add digital wallet details?", "Add digital wallet details", "Skip digital wallet details")
+		if err != nil || !include {
+			return err
+		}
+		*input = &app.DigitalWalletInput{}
+	}
+	var err error
+	if (*input).DigitalCardProfileID == "" {
+		(*input).DigitalCardProfileID, err = promptCardString("Digital card profile id (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).Email == "" {
+		(*input).Email, err = promptCardString("Wallet email (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).Phone == "" {
+		(*input).Phone, err = promptCardString("Wallet phone (optional)", false)
+		if err != nil {
+			return err
+		}
+	}
+	if (*input).DigitalCardProfileID == "" && (*input).Email == "" && (*input).Phone == "" {
+		*input = nil
+	}
+	return nil
 }

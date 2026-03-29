@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/jessevaughan/increasex/internal/mcp"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/mcp"
 	"github.com/spf13/cobra"
 )
 

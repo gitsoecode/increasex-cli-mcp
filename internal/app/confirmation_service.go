@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jessevaughan/increasex/internal/config"
-	"github.com/jessevaughan/increasex/internal/util"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
+	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
 
 type ConfirmationService struct {

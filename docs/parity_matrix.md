@@ -11,7 +11,10 @@ This file tracks the supported core workflows that must exist in both the CLI an
 | Get balance | `increasex balance` | `get_balance` |
 | Create account | `increasex accounts create` | `create_account` |
 | Close account | `increasex accounts close` | `close_account` |
+| List account numbers | `increasex account-numbers` | `list_account_numbers` |
+| Retrieve account number | `increasex account-numbers retrieve` | `retrieve_account_number` |
 | Create account number | `increasex accounts create-number` | `create_account_number` |
+| Disable account number | `increasex account-numbers disable` | `disable_account_number` |
 
 ## Transactions
 
