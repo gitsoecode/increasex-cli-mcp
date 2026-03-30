@@ -71,7 +71,15 @@ increasex balance --account-id account_xxx
 increasex
 ```
 
-**Step 5 — Register the MCP server with your agent host:**
+**Step 5 — Install the companion skill for Codex (recommended):**
+
+This repo also ships an `increasex` skill that helps Codex use `mcp__increasex` safely and follow the preview-first write flow.
+
+```bash
+npx skills add https://github.com/gitsoecode/increasex-cli-mcp --skill increasex
+```
+
+**Step 6 — Register the MCP server with your agent host:**
 
 Because the binary is now on your `PATH`, use the bare command name (not `$(pwd)/increasex`). This way the registration stays valid no matter which directory you are in.
 
