@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gitsoecode/increasex-cli-mcp/internal/config"
@@ -33,6 +34,17 @@ type LoginResult struct {
 
 type StatusResult struct {
 	Profile                 config.Profile `json:"profile"`
+	FileCredentialAvailable bool           `json:"file_credential_available"`
+	KeychainCredentialAvail bool           `json:"keychain_credential_available"`
+	PreferredRuntimeSource  string         `json:"preferred_runtime_source,omitempty"`
+	MCPReady                bool           `json:"mcp_ready"`
+	CredentialError         string         `json:"credential_error,omitempty"`
+	Warnings                []string       `json:"warnings,omitempty"`
+}
+
+type ProfileSummary struct {
+	Profile                 config.Profile `json:"profile"`
+	IsDefault               bool           `json:"is_default"`
 	FileCredentialAvailable bool           `json:"file_credential_available"`
 	KeychainCredentialAvail bool           `json:"keychain_credential_available"`
 	PreferredRuntimeSource  string         `json:"preferred_runtime_source,omitempty"`
@@ -231,6 +243,67 @@ func (s Service) Status(profileName string) (StatusResult, error) {
 	if !ok {
 		return StatusResult{}, util.NewError(util.CodeAuthError, "profile not found", map[string]any{"profile": name}, false)
 	}
+	return s.statusForProfile(profile)
+}
+
+func (s Service) ListProfiles() ([]ProfileSummary, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(cfg.Profiles))
+	for name := range cfg.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	summaries := make([]ProfileSummary, 0, len(names))
+	for _, name := range names {
+		profile := cfg.Profiles[name]
+		summary, err := s.summaryForProfile(profile, name == cfg.DefaultProfile)
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
+}
+
+func (s Service) UseProfile(profileName string) (ProfileSummary, error) {
+	name := strings.TrimSpace(profileName)
+	if name == "" {
+		return ProfileSummary{}, util.NewError(util.CodeValidationError, "profile name is required", nil, false)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return ProfileSummary{}, err
+	}
+	profile, ok := cfg.Profiles[name]
+	if !ok {
+		return ProfileSummary{}, util.NewError(util.CodeAuthError, "profile not found", map[string]any{"profile": name}, false)
+	}
+	summary, err := s.summaryForProfile(profile, name == cfg.DefaultProfile)
+	if err != nil {
+		return ProfileSummary{}, err
+	}
+	if !summary.FileCredentialAvailable && !summary.KeychainCredentialAvail {
+		return ProfileSummary{}, util.NewError(util.CodeAuthError, "no readable stored credentials are available for the selected profile", map[string]any{
+			"profile": name,
+		}, false)
+	}
+	if summary.IsDefault {
+		return summary, nil
+	}
+	cfg.DefaultProfile = name
+	if err := config.Save(cfg); err != nil {
+		return ProfileSummary{}, err
+	}
+	summary.IsDefault = true
+	return summary, nil
+}
+
+func (s Service) statusForProfile(profile config.Profile) (StatusResult, error) {
 	profile.StorageMode = config.NormalizeStorageMode(profile.StorageMode)
 	result := StatusResult{Profile: profile}
 	fileCredential, fileErr := s.loadFileCredential(profile)
@@ -258,6 +331,23 @@ func (s Service) Status(profileName string) (StatusResult, error) {
 		result.CredentialError = "no readable stored credentials are available for the selected profile"
 	}
 	return result, nil
+}
+
+func (s Service) summaryForProfile(profile config.Profile, isDefault bool) (ProfileSummary, error) {
+	status, err := s.statusForProfile(profile)
+	if err != nil {
+		return ProfileSummary{}, err
+	}
+	return ProfileSummary{
+		Profile:                 status.Profile,
+		IsDefault:               isDefault,
+		FileCredentialAvailable: status.FileCredentialAvailable,
+		KeychainCredentialAvail: status.KeychainCredentialAvail,
+		PreferredRuntimeSource:  status.PreferredRuntimeSource,
+		MCPReady:                status.MCPReady,
+		CredentialError:         status.CredentialError,
+		Warnings:                append([]string(nil), status.Warnings...),
+	}, nil
 }
 
 func (s Service) Export(input ResolveInput) (map[string]string, error) {

@@ -59,7 +59,7 @@ increasex --help
 **Step 3 — Log in with a durable local profile:**
 
 ```bash
-increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY
+increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY
 increasex auth status
 ```
 
@@ -166,10 +166,12 @@ Credential resolution order is:
 
 ### Recommended Login
 
-Use the default automatic mode:
+Use the default automatic mode. Separate profiles are the recommended way to keep sandbox and production credentials side by side:
 
 ```bash
-./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY
+./increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY
+./increasex auth login --name prod --env production --api-key YOUR_INCREASE_API_KEY
+./increasex auth use sandbox
 ```
 
 `auto` mode writes a user-only durable credentials file for CLI and MCP use across sessions, and mirrors to Keychain when available.
@@ -177,13 +179,13 @@ Use the default automatic mode:
 Store credentials in the durable file only:
 
 ```bash
-./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY --storage file
+./increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY --storage file
 ```
 
 Store credentials in Keychain only:
 
 ```bash
-./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY --storage keychain
+./increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY --storage keychain
 ```
 
 ### Session-Only Login
@@ -191,7 +193,7 @@ Store credentials in Keychain only:
 If you do not want to store credentials:
 
 ```bash
-eval "$(./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY --print-env)"
+eval "$(./increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY --print-env)"
 ```
 
 That sets shell environment variables for the current session only.
@@ -203,6 +205,17 @@ eval "$(./increasex auth export --confirm)"
 ```
 
 `auth export` prints the raw API key to stdout before you `eval` it. Treat it as an intentional, secret-bearing escape hatch rather than the default auth path.
+
+### Switch Profiles
+
+Switch the persisted default profile without re-entering an API key:
+
+```bash
+./increasex auth use sandbox
+./increasex auth use prod
+```
+
+In the interactive auth menu, use `Switch` to pick a stored profile. MCP does not switch profiles itself; it uses whatever auth context is active when the server is launched, unless you start `mcp serve` with explicit auth overrides.
 
 ### Check Auth
 
@@ -263,6 +276,7 @@ Important:
 - start a fresh session after adding or changing the MCP config
 
 That flow continues working across terminal sessions because `increasex` reads the durable local credential file directly.
+If you change the active profile with `auth use`, start a fresh MCP host session so it picks up the new stored default profile.
 
 Examples:
 
@@ -848,7 +862,7 @@ If you see:
 then log in first:
 
 ```bash
-./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY
+./increasex auth login --name sandbox --env sandbox --api-key YOUR_INCREASE_API_KEY
 ./increasex auth status
 ```
 

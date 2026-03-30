@@ -377,3 +377,190 @@ func TestStatusWarnsWhenOnlyKeychainIsAvailable(t *testing.T) {
 		t.Fatalf("Status().Warnings = %#v, want MCP durability warning", status.Warnings)
 	}
 }
+
+func TestListProfilesReturnsSortedSummariesWithDefaultMarker(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	service := NewService()
+	for _, input := range []LoginInput{
+		{ProfileName: "sandbox", Environment: config.EnvSandbox, APIKey: "sandbox-token", StorageMode: config.StorageModeFile},
+		{ProfileName: "prod", Environment: config.EnvProduction, APIKey: "prod-token", StorageMode: config.StorageModeFile},
+	} {
+		if _, err := service.SaveLogin(input); err != nil {
+			t.Fatalf("SaveLogin(%q) error = %v", input.ProfileName, err)
+		}
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load() error = %v", err)
+	}
+	cfg.DefaultProfile = "sandbox"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("config.Save() error = %v", err)
+	}
+
+	profiles, err := service.ListProfiles()
+	if err != nil {
+		t.Fatalf("ListProfiles() error = %v", err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("len(profiles) = %d, want 2", len(profiles))
+	}
+	if profiles[0].Profile.Name != "prod" || profiles[1].Profile.Name != "sandbox" {
+		t.Fatalf("profiles order = %#v, want alphabetical ordering", profiles)
+	}
+	if profiles[0].IsDefault {
+		t.Fatal("profiles[0].IsDefault = true, want false")
+	}
+	if !profiles[1].IsDefault {
+		t.Fatal("profiles[1].IsDefault = false, want true")
+	}
+	if !profiles[1].FileCredentialAvailable || !profiles[1].MCPReady {
+		t.Fatalf("profiles[1] = %#v, want file-backed MCP readiness", profiles[1])
+	}
+}
+
+func TestUseProfileUpdatesDefaultProfile(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	service := NewService()
+	for _, input := range []LoginInput{
+		{ProfileName: "sandbox", Environment: config.EnvSandbox, APIKey: "sandbox-token", StorageMode: config.StorageModeFile},
+		{ProfileName: "prod", Environment: config.EnvProduction, APIKey: "prod-token", StorageMode: config.StorageModeFile},
+	} {
+		if _, err := service.SaveLogin(input); err != nil {
+			t.Fatalf("SaveLogin(%q) error = %v", input.ProfileName, err)
+		}
+	}
+
+	summary, err := service.UseProfile("sandbox")
+	if err != nil {
+		t.Fatalf("UseProfile() error = %v", err)
+	}
+	if !summary.IsDefault || summary.Profile.Name != "sandbox" {
+		t.Fatalf("UseProfile() = %#v, want sandbox marked default", summary)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load() error = %v", err)
+	}
+	if cfg.DefaultProfile != "sandbox" {
+		t.Fatalf("DefaultProfile = %q, want sandbox", cfg.DefaultProfile)
+	}
+}
+
+func TestUseProfileRejectsUnknownProfile(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	service := NewService()
+	if _, err := service.UseProfile("missing"); err == nil || !strings.Contains(err.Error(), "profile not found") {
+		t.Fatalf("UseProfile() error = %v, want profile not found", err)
+	}
+}
+
+func TestUseProfileRejectsProfilesWithoutReadableCredentials(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	cfg := config.DefaultConfig()
+	cfg.Profiles["empty"] = config.Profile{
+		Name:        "empty",
+		Environment: config.EnvSandbox,
+		StorageMode: config.StorageModeFile,
+	}
+	cfg.DefaultProfile = "empty"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("config.Save() error = %v", err)
+	}
+
+	service := NewService()
+	if _, err := service.UseProfile("empty"); err == nil || !strings.Contains(err.Error(), "no readable stored credentials") {
+		t.Fatalf("UseProfile() error = %v, want missing credential error", err)
+	}
+}
+
+func TestUseProfileAllowsKeychainOnlyProfiles(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	original := runSecurityCommand
+	t.Cleanup(func() {
+		runSecurityCommand = original
+	})
+	runSecurityCommand = func(args ...string) ([]byte, error) {
+		switch args[0] {
+		case "add-generic-password", "find-generic-password":
+			return []byte("increasex-base64:c3RvcmVkLXRva2Vu"), nil
+		case "delete-generic-password":
+			return []byte(""), nil
+		default:
+			return nil, nil
+		}
+	}
+
+	service := NewService()
+	if _, err := service.SaveLogin(LoginInput{
+		ProfileName: "sandbox",
+		Environment: config.EnvSandbox,
+		APIKey:      "stored-token",
+		StorageMode: config.StorageModeKeychain,
+	}); err != nil {
+		t.Fatalf("SaveLogin() error = %v", err)
+	}
+
+	summary, err := service.UseProfile("sandbox")
+	if err != nil {
+		t.Fatalf("UseProfile() error = %v", err)
+	}
+	if !summary.KeychainCredentialAvail {
+		t.Fatalf("UseProfile() = %#v, want keychain credential available", summary)
+	}
+	if summary.MCPReady {
+		t.Fatalf("UseProfile().MCPReady = true, want false for keychain-only profile")
+	}
+	if len(summary.Warnings) == 0 || !strings.Contains(summary.Warnings[0], "MCP durability") {
+		t.Fatalf("UseProfile().Warnings = %#v, want MCP durability warning", summary.Warnings)
+	}
+}
+
+func TestUseProfileIsNoOpForAlreadyActiveProfile(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHome, ".config"))
+
+	service := NewService()
+	if _, err := service.SaveLogin(LoginInput{
+		ProfileName: "sandbox",
+		Environment: config.EnvSandbox,
+		APIKey:      "stored-token",
+		StorageMode: config.StorageModeFile,
+	}); err != nil {
+		t.Fatalf("SaveLogin() error = %v", err)
+	}
+
+	summary, err := service.UseProfile("sandbox")
+	if err != nil {
+		t.Fatalf("UseProfile() error = %v", err)
+	}
+	if !summary.IsDefault {
+		t.Fatalf("UseProfile() = %#v, want active profile to remain default", summary)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load() error = %v", err)
+	}
+	if cfg.DefaultProfile != "sandbox" {
+		t.Fatalf("DefaultProfile = %q, want sandbox", cfg.DefaultProfile)
+	}
+}

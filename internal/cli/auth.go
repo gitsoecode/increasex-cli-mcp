@@ -23,6 +23,7 @@ func newAuthCmd(ctx *Context) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newAuthLoginCmd(ctx),
+		newAuthUseCmd(ctx),
 		newAuthExportCmd(ctx),
 		newAuthWhoamiCmd(ctx),
 		newAuthLogoutCmd(ctx),
@@ -35,6 +36,7 @@ func runAuthMenu(cmd *cobra.Command, ctx *Context) error {
 	for {
 		choice, err := promptSelectNavigation("Authentication", []ui.Option{
 			{Label: "Status", Value: "status", Description: "Show stored profile status"},
+			{Label: "Switch", Value: "use", Description: "Change the active stored profile without re-entering an API key"},
 			{Label: "Login", Value: "login", Description: "Store credentials or print environment exports"},
 			{Label: "Export", Value: "export", Description: "Print shell export commands with the raw API key after confirmation"},
 			{Label: "Who am I", Value: "whoami", Description: "Validate auth and show the active profile and entity context"},
@@ -46,6 +48,13 @@ func runAuthMenu(cmd *cobra.Command, ctx *Context) error {
 		switch choice {
 		case "status":
 			if err := invokeCommand(cmd, newAuthStatusCmd(ctx)); err != nil {
+				if isNavigateExit(err) {
+					return err
+				}
+				return err
+			}
+		case "use":
+			if err := invokeCommand(cmd, newAuthUseCmd(ctx)); err != nil {
 				if isNavigateExit(err) {
 					return err
 				}
@@ -85,6 +94,69 @@ func runAuthMenu(cmd *cobra.Command, ctx *Context) error {
 	}
 }
 
+func newAuthUseCmd(ctx *Context) *cobra.Command {
+	return &cobra.Command{
+		Use:     "use [profile]",
+		Aliases: []string{"switch"},
+		Short:   "Switch the active stored profile",
+		Args:    cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			profiles, err := ctx.Services.ListAuthProfiles()
+			if err != nil {
+				if ctx.Options.JSON {
+					return printEnvelopeJSON(nil, "", err)
+				}
+				return err
+			}
+			if len(profiles) == 0 {
+				err := fmt.Errorf("no stored profiles found; run `increasex auth login` first")
+				if ctx.Options.JSON {
+					return printEnvelopeJSON(nil, "", err)
+				}
+				return err
+			}
+
+			profile := ""
+			if len(args) > 0 {
+				profile = strings.TrimSpace(args[0])
+			}
+			if profile == "" {
+				if isInteractiveRequested(ctx.Options) {
+					selected, err := promptSelectNavigation("Switch profile", buildAuthProfileOptions(profiles), navBack, navExit)
+					if err != nil {
+						return bubbleNavigation(cmd, err)
+					}
+					profile = selected
+				} else {
+					err := fmt.Errorf("profile is required; available profiles: %s", strings.Join(authProfileNames(profiles), ", "))
+					if ctx.Options.JSON {
+						return printEnvelopeJSON(nil, "", err)
+					}
+					return err
+				}
+			}
+
+			alreadyDefault := false
+			for _, item := range profiles {
+				if item.Profile.Name == profile {
+					alreadyDefault = item.IsDefault
+					break
+				}
+			}
+
+			summary, err := ctx.Services.UseAuthProfile(profile)
+			if ctx.Options.JSON {
+				return printEnvelopeJSON(summary, "", err)
+			}
+			if err != nil {
+				return err
+			}
+			printAuthProfileSummary(summary, alreadyDefault)
+			return nil
+		},
+	}
+}
+
 func newAuthLoginCmd(ctx *Context) *cobra.Command {
 	var profile, env, apiKey, storage string
 	var printEnv bool
@@ -98,6 +170,16 @@ func newAuthLoginCmd(ctx *Context) *cobra.Command {
 					return bubbleNavigation(cmd, err)
 				}
 				env = selected
+			}
+			if isInteractiveRequested(ctx.Options) && !cmd.Flags().Changed("name") {
+				value, err := promptStringNavigation(loginProfilePromptLabel(env), false)
+				if err != nil {
+					return bubbleNavigation(cmd, err)
+				}
+				profile = strings.TrimSpace(value)
+				if profile == "" {
+					profile = defaultLoginProfileName(env)
+				}
 			}
 			if apiKey == "" && isInteractiveRequested(ctx.Options) {
 				value, err := promptStringNavigation("Increase API key", true)
@@ -289,6 +371,81 @@ func newAuthStatusCmd(ctx *Context) *cobra.Command {
 			})
 			return nil
 		},
+	}
+}
+
+func printAuthProfileSummary(summary auth.ProfileSummary, alreadyDefault bool) {
+	message := "Active profile updated"
+	if alreadyDefault {
+		message = "Profile already active"
+	}
+	printKeyValues(map[string]any{
+		"message":                       message,
+		"name":                          summary.Profile.Name,
+		"environment":                   summary.Profile.Environment,
+		"storage_mode":                  summary.Profile.StorageMode,
+		"is_default":                    summary.IsDefault,
+		"file_credential_available":     summary.FileCredentialAvailable,
+		"keychain_credential_available": summary.KeychainCredentialAvail,
+		"preferred_runtime_source":      summary.PreferredRuntimeSource,
+		"mcp_ready":                     summary.MCPReady,
+		"credential_error":              summary.CredentialError,
+		"warnings":                      strings.Join(summary.Warnings, "; "),
+	})
+}
+
+func buildAuthProfileOptions(profiles []auth.ProfileSummary) []ui.Option {
+	options := make([]ui.Option, 0, len(profiles))
+	for _, profile := range profiles {
+		label := profile.Profile.Name
+		if profile.IsDefault {
+			label += " (active)"
+		}
+		descriptionParts := []string{profile.Profile.Environment, string(profile.Profile.StorageMode)}
+		switch {
+		case profile.MCPReady:
+			descriptionParts = append(descriptionParts, "mcp-ready")
+		case profile.KeychainCredentialAvail:
+			descriptionParts = append(descriptionParts, "keychain-only")
+		default:
+			descriptionParts = append(descriptionParts, "missing-credentials")
+		}
+		options = append(options, ui.Option{
+			Label:       label,
+			Value:       profile.Profile.Name,
+			Description: strings.Join(descriptionParts, " | "),
+			Search: strings.Join([]string{
+				profile.Profile.Name,
+				profile.Profile.Environment,
+				string(profile.Profile.StorageMode),
+				profile.PreferredRuntimeSource,
+				strings.Join(profile.Warnings, " "),
+			}, " "),
+		})
+	}
+	return options
+}
+
+func authProfileNames(profiles []auth.ProfileSummary) []string {
+	names := make([]string, 0, len(profiles))
+	for _, profile := range profiles {
+		names = append(names, profile.Profile.Name)
+	}
+	return names
+}
+
+func loginProfilePromptLabel(env string) string {
+	return fmt.Sprintf("Profile name (blank for %s)", defaultLoginProfileName(env))
+}
+
+func defaultLoginProfileName(env string) string {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case config.EnvSandbox:
+		return "sandbox"
+	case config.EnvProduction:
+		return "prod"
+	default:
+		return "default"
 	}
 }
 

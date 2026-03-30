@@ -52,6 +52,14 @@ func (s Services) AuthStatus(profileName string) (auth.StatusResult, error) {
 	return s.auth.Status(profileName)
 }
 
+func (s Services) ListAuthProfiles() ([]auth.ProfileSummary, error) {
+	return s.auth.ListProfiles()
+}
+
+func (s Services) UseAuthProfile(profileName string) (auth.ProfileSummary, error) {
+	return s.auth.UseProfile(profileName)
+}
+
 func (s Services) Export(input auth.ResolveInput) (map[string]string, error) {
 	return s.auth.Export(input)
 }
