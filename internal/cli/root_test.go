@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -53,18 +54,28 @@ func TestNormalizeTransferRail(t *testing.T) {
 	}
 }
 
-func TestRenderTableCompactFallback(t *testing.T) {
-	t.Setenv("COLUMNS", "60")
+func TestRenderRecordListIncludesTitleMetaAndFields(t *testing.T) {
+	t.Setenv("COLUMNS", "72")
 
-	output := renderTable("Transfers", []string{"ID", "DESCRIPTION"}, [][]string{
-		{"transfer_1234567890", "A very long description that should not wrap awkwardly in narrow terminals."},
+	output := renderRecordList("Transfers", []recordItem{
+		{
+			Title: "Payroll vendor transfer for weekly settlement",
+			Meta:  "$125.00 • ach • pending_approval",
+			Fields: []recordField{
+				{Label: "id", Value: "transfer_1234567890abcdef"},
+				{Label: "external_account", Value: "external_account_1234567890abcdef"},
+			},
+		},
 	})
 
-	if !strings.Contains(output, "description:") {
-		t.Fatalf("renderTable() should include compact key/value output, got %q", output)
-	}
 	if !strings.Contains(output, "Transfers") {
-		t.Fatalf("renderTable() should include the title, got %q", output)
+		t.Fatalf("renderRecordList() should include the list title, got %q", output)
+	}
+	if !strings.Contains(output, "id:") || !strings.Contains(output, "external_account:") {
+		t.Fatalf("renderRecordList() should include labeled fields, got %q", output)
+	}
+	if !strings.Contains(output, "$125.00") || !strings.Contains(output, "pending_approval") {
+		t.Fatalf("renderRecordList() should include the meta line, got %q", output)
 	}
 }
 
@@ -91,67 +102,35 @@ func TestTransferConfirmationPromptReflectsApprovalState(t *testing.T) {
 	}
 }
 
-func TestRenderTableWideTruncatesLongCells(t *testing.T) {
-	t.Setenv("COLUMNS", "90")
+func TestRenderRecordListKeepsLinesWithinWidthBudget(t *testing.T) {
+	widths := []int{48, 72, 96}
+	for _, width := range widths {
+		t.Run(strconv.Itoa(width), func(t *testing.T) {
+			t.Setenv("COLUMNS", strconv.Itoa(width))
 
-	output := renderTable("Transfers", []string{"ID", "DESCRIPTION", "AMOUNT"}, [][]string{
-		{"transfer_1234567890abcdef", "A very long description that should be truncated instead of wrapping across the terminal width", "$100.00"},
-	})
+			output := renderRecordList("Transactions", []recordItem{
+				{
+					Title: "Merchant settlement for a deliberately long transaction description",
+					Meta:  "$1,234.56 • credit • card_settlement",
+					Fields: []recordField{
+						{Label: "id", Value: "transaction_1234567890abcdef"},
+						{Label: "account", Value: "account_1234567890abcdef"},
+						{Label: "counterparty", Value: "A deliberately verbose counterparty summary for wrapping"},
+						{Label: "route_id", Value: "route_1234567890abcdef"},
+					},
+				},
+			})
 
-	if strings.Contains(output, "wrapping across the terminal width") {
-		t.Fatalf("renderTable() should truncate long wide-table cells, got %q", output)
-	}
-	if !strings.Contains(output, "...") {
-		t.Fatalf("renderTable() should show ellipsis for truncated content, got %q", output)
+			assertRenderedLinesFitWidth(t, output, width)
+			if strings.Contains(output, "ACCOUNT") || strings.Contains(output, "DESCRIPTION") {
+				t.Fatalf("renderRecordList() should not emit old table headers, got %q", output)
+			}
+		})
 	}
 }
 
-func TestRenderTableKeepsHeaderAndRowsWithinWidthBudget(t *testing.T) {
+func TestPrintCardsUsesRecordLayout(t *testing.T) {
 	t.Setenv("COLUMNS", "96")
-
-	output := renderTable("Transactions", []string{"ID", "ACCOUNT", "AMOUNT", "DIRECTION", "DESCRIPTION", "CREATED"}, [][]string{
-		{
-			"transaction_1234567890abcdef",
-			"account_1234567890abcdef",
-			"$1,234.56",
-			"credit",
-			"Merchant settlement for a deliberately long transaction description",
-			"2026-03-29T12:34:56Z",
-		},
-	})
-
-	assertRenderedLinesFitWidth(t, output, 96)
-	if !strings.Contains(output, "Transactions") {
-		t.Fatalf("renderTable() should include the title, got %q", output)
-	}
-	if !strings.Contains(output, "...") {
-		t.Fatalf("renderTable() should truncate long transaction cells when needed, got %q", output)
-	}
-}
-
-func TestRenderTableAccountShapesStayAligned(t *testing.T) {
-	t.Setenv("COLUMNS", "104")
-
-	output := renderTable("Account Numbers", []string{"NAME", "ID", "ACCOUNT", "ROUTING", "NUMBER", "STATUS", "CREATED"}, [][]string{
-		{
-			"Primary operating account",
-			"account_number_1234567890abcdef",
-			"account_1234567890abcdef",
-			"021000021",
-			"******6789",
-			"active",
-			"2026-03-29T12:34:56Z",
-		},
-	})
-
-	assertRenderedLinesFitWidth(t, output, 104)
-	if !strings.Contains(output, "Account Numbers") {
-		t.Fatalf("renderTable() should include the account-number title, got %q", output)
-	}
-}
-
-func TestPrintCardsKeepsWideRowsInTableLayout(t *testing.T) {
-	t.Setenv("COLUMNS", "110")
 
 	output := captureStdout(t, func() {
 		printCards([]app.CardSummary{
@@ -174,16 +153,16 @@ func TestPrintCardsKeepsWideRowsInTableLayout(t *testing.T) {
 		})
 	})
 
-	assertRenderedLinesFitWidth(t, output, 110)
-	if !strings.Contains(output, "LAST4") {
-		t.Fatalf("printCards() should keep the wide table header in normal-width terminals, got %q", output)
+	assertRenderedLinesFitWidth(t, output, 96)
+	if !strings.Contains(output, "First card created") || !strings.Contains(output, "last4:") {
+		t.Fatalf("printCards() should render record fields, got %q", output)
 	}
-	if strings.Contains(output, "description:") {
-		t.Fatalf("printCards() should not fall back to compact layout when the table fits, got %q", output)
+	if strings.Contains(output, "LAST4") || strings.Contains(output, "ACCOUNT") {
+		t.Fatalf("printCards() should not render old table headers, got %q", output)
 	}
 }
 
-func TestPrintCardsFallsBackToCompactLayoutWhenRowsCannotFit(t *testing.T) {
+func TestPrintCardsWrapCleanlyAtNarrowWidths(t *testing.T) {
 	t.Setenv("COLUMNS", "84")
 
 	output := captureStdout(t, func() {
@@ -200,11 +179,121 @@ func TestPrintCardsFallsBackToCompactLayoutWhenRowsCannotFit(t *testing.T) {
 	})
 
 	assertRenderedLinesFitWidth(t, output, 84)
-	if !strings.Contains(output, "description:") || !strings.Contains(output, "last4:") {
-		t.Fatalf("printCards() should fall back to the compact key/value layout when the table cannot fit, got %q", output)
+	if !strings.Contains(output, "last4:") || !strings.Contains(output, "created_at:") {
+		t.Fatalf("printCards() should keep labeled record fields in narrow terminals, got %q", output)
 	}
 	if strings.Contains(output, "LAST4") {
-		t.Fatalf("printCards() should not render the wide header row after compact fallback, got %q", output)
+		t.Fatalf("printCards() should not render old table headers, got %q", output)
+	}
+}
+
+func TestPrintAccountsUsesRecordLayout(t *testing.T) {
+	t.Setenv("COLUMNS", "72")
+
+	output := captureStdout(t, func() {
+		printAccounts([]app.AccountSummary{
+			{
+				ID:        "sandbox_account_1234567890abcdef",
+				Name:      "Corporate Checking",
+				Status:    "open",
+				EntityID:  "sandbox_entity_1234567890abcdef",
+				ProgramID: "sandbox_program_1234567890abcdef",
+				CreatedAt: "2026-03-29T20:54:10Z",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 72)
+	if !strings.Contains(output, "Corporate Checking") || !strings.Contains(output, "entity:") || !strings.Contains(output, "program:") {
+		t.Fatalf("printAccounts() should render record fields, got %q", output)
+	}
+	if strings.Contains(output, "NAME") || strings.Contains(output, "PROGRAM") {
+		t.Fatalf("printAccounts() should not render old table headers, got %q", output)
+	}
+}
+
+func TestPrintTransactionsUsesRecordLayoutAndOptionalFields(t *testing.T) {
+	t.Setenv("COLUMNS", "96")
+
+	output := captureStdout(t, func() {
+		printTransactions([]app.TransactionSummary{
+			{
+				ID:                  "transaction_1234567890abcdef",
+				AccountID:           "account_1234567890abcdef",
+				AmountCents:         123456,
+				Direction:           "credit",
+				Description:         "Merchant settlement",
+				Type:                "card_settlement",
+				CreatedAt:           "2026-03-29T12:34:56Z",
+				RouteID:             "route_1234567890abcdef",
+				RouteType:           "card_payment",
+				CounterpartySummary: "Merchant Processor",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 96)
+	if !strings.Contains(output, "Merchant settlement") || !strings.Contains(output, "$1234.56") {
+		t.Fatalf("printTransactions() should render title and meta, got %q", output)
+	}
+	if !strings.Contains(output, "counterparty:") || !strings.Contains(output, "route_type:") || !strings.Contains(output, "route_id:") {
+		t.Fatalf("printTransactions() should include optional fields when present, got %q", output)
+	}
+	if strings.Contains(output, "ACCOUNT") || strings.Contains(output, "DESCRIPTION") {
+		t.Fatalf("printTransactions() should not render old table headers, got %q", output)
+	}
+}
+
+func TestPrintExternalAccountsUsesRecordLayout(t *testing.T) {
+	t.Setenv("COLUMNS", "72")
+
+	output := captureStdout(t, func() {
+		printExternalAccounts([]app.ExternalAccountSummary{
+			{
+				ID:                  "external_account_1234567890abcdef",
+				Description:         "Primary vendor",
+				AccountHolder:       "business",
+				Funding:             "checking",
+				RoutingNumber:       "021000021",
+				AccountNumberMasked: "****6789",
+				Status:              "active",
+				CreatedAt:           "2026-03-29T20:54:10Z",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 72)
+	if !strings.Contains(output, "Primary vendor") || !strings.Contains(output, "account:") || !strings.Contains(output, "****6789") {
+		t.Fatalf("printExternalAccounts() should render labeled masked fields, got %q", output)
+	}
+	if strings.Contains(output, "ROUTING") || strings.Contains(output, "ACCOUNT") {
+		t.Fatalf("printExternalAccounts() should not render old table headers, got %q", output)
+	}
+}
+
+func TestPrintTransfersUsesRecordLayout(t *testing.T) {
+	t.Setenv("COLUMNS", "72")
+
+	output := captureStdout(t, func() {
+		printTransfers("Transfers", []app.TransferSummary{
+			{
+				Rail:              "ach",
+				ID:                "ach_transfer_1234567890abcdef",
+				AmountCents:       2550,
+				Status:            "pending_approval",
+				CreatedAt:         "2026-03-29T12:34:56Z",
+				ExternalAccountID: "external_account_1234567890abcdef",
+				Counterparty:      "Payroll vendor",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 72)
+	if !strings.Contains(output, "Payroll vendor") || !strings.Contains(output, "$25.50") || !strings.Contains(output, "external_account:") {
+		t.Fatalf("printTransfers() should render record-style transfers, got %q", output)
+	}
+	if strings.Contains(output, "RAIL") || strings.Contains(output, "STATUS") {
+		t.Fatalf("printTransfers() should not render old table headers, got %q", output)
 	}
 }
 

@@ -60,11 +60,20 @@ func printKeyValues(values map[string]any) {
 }
 
 func printAccounts(accounts []app.AccountSummary) {
-	rows := make([][]string, 0, len(accounts))
+	items := make([]recordItem, 0, len(accounts))
 	for _, account := range accounts {
-		rows = append(rows, []string{account.Name, account.ID, account.Status, account.EntityID, account.ProgramID, account.CreatedAt})
+		items = append(items, recordItem{
+			Title: firstNonEmptyLabel(account.Name, account.ID),
+			Meta:  account.Status,
+			Fields: []recordField{
+				{Label: "id", Value: account.ID},
+				{Label: "entity", Value: emptyDash(account.EntityID)},
+				{Label: "program", Value: emptyDash(account.ProgramID)},
+				{Label: "created_at", Value: emptyDash(account.CreatedAt)},
+			},
+		})
 	}
-	fmt.Println(renderTable("Accounts", []string{"NAME", "ID", "STATUS", "ENTITY", "PROGRAM", "CREATED"}, rows))
+	fmt.Println(renderRecordList("Accounts", items))
 }
 
 func printAccountNumbers(numbers []app.AccountNumberSummary) {
@@ -96,74 +105,108 @@ func printAccountNumberDetails(number *app.AccountNumberDetails) {
 }
 
 func printTransactions(items []app.TransactionSummary) {
-	rows := make([][]string, 0, len(items))
+	records := make([]recordItem, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, []string{item.ID, item.AccountID, util.FormatUSDMinor(item.AmountCents), item.Direction, item.Description, item.CreatedAt})
+		fields := []recordField{
+			{Label: "id", Value: item.ID},
+			{Label: "account", Value: emptyDash(item.AccountID)},
+			{Label: "type", Value: emptyDash(item.Type)},
+			{Label: "created_at", Value: emptyDash(item.CreatedAt)},
+		}
+		if strings.TrimSpace(item.CounterpartySummary) != "" {
+			fields = append(fields, recordField{Label: "counterparty", Value: item.CounterpartySummary})
+		}
+		if strings.TrimSpace(item.RouteType) != "" {
+			fields = append(fields, recordField{Label: "route_type", Value: item.RouteType})
+		}
+		if strings.TrimSpace(item.RouteID) != "" {
+			fields = append(fields, recordField{Label: "route_id", Value: item.RouteID})
+		}
+		records = append(records, recordItem{
+			Title:  firstNonEmptyLabel(item.Description, item.ID),
+			Meta:   joinRecordMeta(util.FormatUSDMinor(item.AmountCents), item.Direction),
+			Fields: fields,
+		})
 	}
-	fmt.Println(renderTable("Transactions", []string{"ID", "ACCOUNT", "AMOUNT", "DIRECTION", "DESCRIPTION", "CREATED"}, rows))
+	fmt.Println(renderRecordList("Transactions", records))
 }
 
 func printCards(cards []app.CardSummary) {
-	rows := make([][]string, 0, len(cards))
+	items := make([]recordItem, 0, len(cards))
 	for _, card := range cards {
-		rows = append(rows, []string{card.ID, card.AccountID, card.Last4, card.Status, card.Description, card.CreatedAt})
+		title := strings.TrimSpace(card.Description)
+		if title == "" && strings.TrimSpace(card.Last4) != "" {
+			title = "Card • " + card.Last4
+		}
+		if title == "" {
+			title = card.ID
+		}
+		items = append(items, recordItem{
+			Title: title,
+			Meta:  card.Status,
+			Fields: []recordField{
+				{Label: "id", Value: card.ID},
+				{Label: "account", Value: emptyDash(card.AccountID)},
+				{Label: "last4", Value: emptyDash(card.Last4)},
+				{Label: "created_at", Value: emptyDash(card.CreatedAt)},
+			},
+		})
 	}
-	fmt.Println(renderTable("Cards", []string{"ID", "ACCOUNT", "LAST4", "STATUS", "DESCRIPTION", "CREATED"}, rows))
+	fmt.Println(renderRecordList("Cards", items))
 }
 
 func printExternalAccounts(accounts []app.ExternalAccountSummary) {
-	rows := make([][]string, 0, len(accounts))
+	items := make([]recordItem, 0, len(accounts))
 	for _, account := range accounts {
-		rows = append(rows, []string{
-			account.Description,
-			account.ID,
-			account.AccountHolder,
-			account.Funding,
-			account.RoutingNumber,
-			account.AccountNumberMasked,
-			account.Status,
-			account.CreatedAt,
+		items = append(items, recordItem{
+			Title: firstNonEmptyLabel(account.Description, account.ID),
+			Meta:  account.Status,
+			Fields: []recordField{
+				{Label: "id", Value: account.ID},
+				{Label: "holder", Value: emptyDash(account.AccountHolder)},
+				{Label: "funding", Value: emptyDash(account.Funding)},
+				{Label: "routing", Value: emptyDash(account.RoutingNumber)},
+				{Label: "account", Value: emptyDash(account.AccountNumberMasked)},
+				{Label: "created_at", Value: emptyDash(account.CreatedAt)},
+			},
 		})
 	}
-	fmt.Println(renderTable("External Accounts", []string{"DESCRIPTION", "ID", "HOLDER", "FUNDING", "ROUTING", "ACCOUNT", "STATUS", "CREATED"}, rows))
+	fmt.Println(renderRecordList("External Accounts", items))
 }
 
 func printTransfers(title string, items []app.TransferSummary) {
-	rows := make([][]string, 0, len(items))
+	records := make([]recordItem, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, []string{
-			item.Rail,
-			item.ID,
-			util.FormatUSDMinor(item.AmountCents),
-			item.Status,
-			item.Counterparty,
-			item.ExternalAccountID,
-			item.CreatedAt,
+		records = append(records, recordItem{
+			Title: firstNonEmptyLabel(item.Counterparty, item.ID),
+			Meta:  joinRecordMeta(util.FormatUSDMinor(item.AmountCents), item.Rail, item.Status),
+			Fields: []recordField{
+				{Label: "id", Value: item.ID},
+				{Label: "external_account", Value: emptyDash(item.ExternalAccountID)},
+				{Label: "created_at", Value: emptyDash(item.CreatedAt)},
+			},
 		})
 	}
-	fmt.Println(renderTable(title, []string{"RAIL", "ID", "AMOUNT", "STATUS", "COUNTERPARTY", "EXTERNAL ACCOUNT", "CREATED"}, rows))
+	fmt.Println(renderRecordList(title, records))
 }
 
 func renderAccountNumberList(numbers []app.AccountNumberSummary) string {
-	if len(numbers) == 0 {
-		return renderPanel(titleStyle.Render("Account Numbers") + "\n" + mutedStyle.Render("No results"))
+	items := make([]recordItem, 0, len(numbers))
+	for _, number := range numbers {
+		items = append(items, recordItem{
+			Title: firstNonEmptyLabel(number.Name, number.ID),
+			Meta:  number.Status,
+			Fields: []recordField{
+				{Label: "account", Value: formatAccountNumberParentAccount(number.AccountName, number.AccountID)},
+				{Label: "routing", Value: emptyDash(number.RoutingNumber)},
+				{Label: "number", Value: emptyDash(number.AccountNumberMasked)},
+				{Label: "ach", Value: formatInboundACHStatus(number.InboundACH)},
+				{Label: "checks", Value: formatInboundChecksStatus(number.InboundChecks)},
+				{Label: "id", Value: number.ID},
+			},
+		})
 	}
-
-	lines := []string{titleStyle.Render("Account Numbers")}
-	for i, number := range numbers {
-		if i > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, valueStyle.Render(firstNonEmptyLabel(number.Name, number.ID)))
-		lines = append(lines, renderDetailLine("account", formatAccountNumberParentAccount(number.AccountName, number.AccountID))...)
-		lines = append(lines, renderDetailLine("routing", number.RoutingNumber)...)
-		lines = append(lines, renderDetailLine("number", number.AccountNumberMasked)...)
-		lines = append(lines, renderDetailLine("status", number.Status)...)
-		lines = append(lines, renderDetailLine("ach", formatInboundACHStatus(number.InboundACH))...)
-		lines = append(lines, renderDetailLine("checks", formatInboundChecksStatus(number.InboundChecks))...)
-		lines = append(lines, renderDetailLine("id", number.ID)...)
-	}
-	return renderPanel(strings.Join(lines, "\n"))
+	return renderRecordList("Account Numbers", items)
 }
 
 func formatInboundACHStatus(inboundACH *app.InboundACHInput) string {
@@ -513,7 +556,6 @@ func browserOpenCommand(rawURL string) (string, []string, error) {
 
 var (
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69"))
-	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("24"))
 	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("110"))
 	valueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
@@ -540,122 +582,33 @@ func asciiBorder() lipgloss.Border {
 	}
 }
 
-func renderTable(title string, headers []string, rows [][]string) string {
-	if len(rows) == 0 {
+type recordField struct {
+	Label string
+	Value string
+}
+
+type recordItem struct {
+	Title  string
+	Meta   string
+	Fields []recordField
+}
+
+func renderRecordList(title string, items []recordItem) string {
+	if len(items) == 0 {
 		return renderPanel(titleStyle.Render(title) + "\n" + mutedStyle.Render("No results"))
 	}
 
-	contentWidths := make([]int, len(headers))
-	minimums := make([]int, len(headers))
-	for i, header := range headers {
-		contentWidths[i] = displayWidth(header)
-		minimums[i] = minColumnWidth(header)
-		if minimums[i] < contentWidths[i] {
-			minimums[i] = contentWidths[i]
-		}
-	}
-	for _, row := range rows {
-		for i, cell := range row {
-			cellWidth := displayWidth(cell)
-			if cellWidth > contentWidths[i] {
-				contentWidths[i] = cellWidth
-			}
-		}
-	}
-	for i, header := range headers {
-		maxWidth := suggestedMaxColumnWidth(header)
-		if contentWidths[i] > maxWidth {
-			contentWidths[i] = maxWidth
-		}
-		if contentWidths[i] < minimums[i] {
-			contentWidths[i] = minimums[i]
-		}
-	}
-
-	available := tableAvailableWidth()
-	if available < compactTableThreshold(minimums) {
-		return renderCompactTable(title, headers, rows)
-	}
-
-	for tableRenderedWidth(contentWidths) > available {
-		shrunk := false
-		for i, header := range headers {
-			if contentWidths[i] > minimums[i] && canShrinkColumn(header) {
-				contentWidths[i]--
-				shrunk = true
-				if tableRenderedWidth(contentWidths) <= available {
-					break
-				}
-			}
-		}
-		if !shrunk {
-			break
-		}
-	}
-	if tableRenderedWidth(contentWidths) > available {
-		return renderCompactTable(title, headers, rows)
-	}
-
-	var out strings.Builder
-	out.WriteString(titleStyle.Render(title))
-	out.WriteString("\n")
-	for i, header := range headers {
-		out.WriteString(renderTableCell(headerStyle, truncate(header, contentWidths[i]), contentWidths[i]))
-		if i < len(headers)-1 {
-			out.WriteString(" ")
-		}
-	}
-	out.WriteString("\n")
-	for _, row := range rows {
-		for i, cell := range row {
-			style := valueStyle
-			if isMutedColumn(headers[i]) {
-				style = mutedStyle
-			}
-			if isRightAlignedColumn(headers[i]) {
-				style = style.Align(lipgloss.Right)
-			}
-			out.WriteString(renderTableCell(style, truncate(cell, contentWidths[i]), contentWidths[i]))
-			if i < len(row)-1 {
-				out.WriteString(" ")
-			}
-		}
-		out.WriteString("\n")
-	}
-	return renderPanel(strings.TrimRight(out.String(), "\n"))
-}
-
-func renderTableCell(style lipgloss.Style, value string, contentWidth int) string {
-	return style.Padding(0, 1).Width(contentWidth).MaxWidth(contentWidth).Render(value)
-}
-
-func truncate(value string, width int) string {
-	if width <= 0 || displayWidth(value) <= width {
-		return value
-	}
-	if width <= 3 {
-		return string([]rune(value)[:width])
-	}
-	runes := []rune(value)
-	if len(runes) <= width {
-		return value
-	}
-	return string(runes[:width-3]) + "..."
-}
-
-func renderCompactTable(title string, headers []string, rows [][]string) string {
 	lines := []string{titleStyle.Render(title)}
-	for i, row := range rows {
+	for i, item := range items {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("[%d]", i+1)))
-		for j, header := range headers {
-			value := ""
-			if j < len(row) {
-				value = row[j]
-			}
-			lines = append(lines, renderDetailLine(strings.ToLower(header), value)...)
+		lines = append(lines, valueStyle.Render(item.Title))
+		if strings.TrimSpace(item.Meta) != "" {
+			lines = append(lines, mutedStyle.Render(item.Meta))
+		}
+		for _, field := range item.Fields {
+			lines = append(lines, renderDetailLine(field.Label, field.Value)...)
 		}
 	}
 	return renderPanel(strings.Join(lines, "\n"))
@@ -754,83 +707,15 @@ func wrapText(value string, width int) []string {
 	return lines
 }
 
-func sum(values []int) int {
-	total := 0
-	for _, value := range values {
-		total += value
+func joinRecordMeta(parts ...string) string {
+	filtered := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			filtered = append(filtered, part)
+		}
 	}
-	return total
-}
-
-func tableAvailableWidth() int {
-	available := terminalWidth() - 2 - panelStyle.GetHorizontalFrameSize()
-	if available < 24 {
-		return 24
-	}
-	return available
-}
-
-func compactTableThreshold(minimums []int) int {
-	return max(56, tableRenderedWidth(minimums))
-}
-
-func tableRenderedWidth(contentWidths []int) int {
-	cellFrameWidth := lipgloss.NewStyle().Padding(0, 1).GetHorizontalFrameSize()
-	return sum(contentWidths) + (len(contentWidths) * cellFrameWidth) + max(len(contentWidths)-1, 0)
-}
-
-func minColumnWidth(header string) int {
-	switch normalizedHeader(header) {
-	case "amount", "last4", "status":
-		return 8
-	case "id", "account", "entity", "program", "routing", "rail":
-		return 10
-	case "created":
-		return 16
-	case "counterparty", "description", "external account":
-		return 14
-	default:
-		return max(8, displayWidth(header))
-	}
-}
-
-func suggestedMaxColumnWidth(header string) int {
-	switch normalizedHeader(header) {
-	case "description", "counterparty":
-		return 24
-	case "id", "account", "entity", "program", "external account":
-		return 20
-	case "created":
-		return 20
-	default:
-		return 16
-	}
-}
-
-func canShrinkColumn(header string) bool {
-	switch normalizedHeader(header) {
-	case "description", "counterparty", "id", "account", "entity", "program", "external account", "created":
-		return true
-	default:
-		return false
-	}
-}
-
-func isMutedColumn(header string) bool {
-	switch normalizedHeader(header) {
-	case "status", "created", "rail":
-		return true
-	default:
-		return false
-	}
-}
-
-func isRightAlignedColumn(header string) bool {
-	return normalizedHeader(header) == "amount"
-}
-
-func normalizedHeader(header string) string {
-	return strings.ToLower(strings.TrimSpace(header))
+	return strings.Join(filtered, " • ")
 }
 
 func max(a, b int) int {
@@ -847,4 +732,11 @@ func firstNonEmptyLabel(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func emptyDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
 }

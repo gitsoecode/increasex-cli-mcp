@@ -35,41 +35,69 @@ What this is not:
 
 ## Quick Start
 
-Build the binary:
+**Step 1 — Build the binary:**
 
 ```bash
-go build -o increasex ./cmd/increasex
+GOCACHE=/tmp/increasex-gocache go build -o increasex ./cmd/increasex
 ```
 
-Log in with a durable local profile:
+**Step 2 — Install to your PATH** (so you can run `increasex` from anywhere without `./`):
 
 ```bash
-./increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY
-./increasex auth status
+sudo mv increasex /usr/local/bin/increasex
 ```
 
-Verify the CLI works:
+On most macOS systems, `/usr/local/bin` requires `sudo`. Alternatively, add the repo directory to your shell `PATH` — see the [Install](#install) section.
+
+Verify it's on your PATH:
 
 ```bash
-./increasex accounts
-./increasex balance --account-id account_xxx
-./increasex
+which increasex
+increasex --help
 ```
 
-Register the MCP server with Codex:
+**Step 3 — Log in with a durable local profile:**
 
 ```bash
-codex mcp add increasex -- "$(pwd)/increasex" mcp serve
+increasex auth login --name default --env sandbox --api-key YOUR_INCREASE_API_KEY
+increasex auth status
+```
+
+**Step 4 — Verify the CLI works:**
+
+```bash
+increasex accounts
+increasex balance --account-id account_xxx
+increasex
+```
+
+**Step 5 — Register the MCP server with your agent host:**
+
+Because the binary is now on your `PATH`, use the bare command name (not `$(pwd)/increasex`). This way the registration stays valid no matter which directory you are in.
+
+**Codex**
+
+```bash
+codex mcp add increasex -- increasex mcp serve
 codex mcp list
 ```
 
-Then start a fresh Codex session and ask:
+**Claude Code**
+
+```bash
+claude mcp add increasex increasex mcp serve
+claude mcp list
+```
+
+Then start a fresh session and ask:
 
 ```text
 List the available MCP tool namespaces in this session.
 ```
 
 You should see `mcp__increasex`.
+
+> **Why this order matters:** MCP hosts record the exact binary path at registration time. If you register with `$(pwd)/increasex` and later move the binary to `/usr/local/bin`, the recorded path breaks and the MCP server fails to connect. Installing to `PATH` first and registering with the bare command name avoids this.
 
 ## Build
 
@@ -89,21 +117,30 @@ go run ./cmd/increasex --help
 
 ## Install
 
-If you stay in the repo directory, run the binary with:
+Install to your `PATH` before registering the MCP server. This lets you use the bare `increasex` command from any directory and ensures the MCP registration stays valid after moving the binary.
 
-```bash
-./increasex --help
-```
-
-If you want to run `increasex` without `./`, place the binary somewhere on your `PATH`, for example:
+**Option A — move to `/usr/local/bin` (recommended):**
 
 ```bash
 sudo mv increasex /usr/local/bin/increasex
 ```
 
-On many macOS systems, writing to `/usr/local/bin` requires `sudo`.
+On most macOS systems, writing to `/usr/local/bin` requires `sudo`.
 
-Or add this repo directory to your shell `PATH`.
+**Option B — add the repo directory to your shell `PATH`:**
+
+```bash
+# in ~/.zshrc or ~/.bashrc
+export PATH="$PATH:/path/to/this/repo"
+```
+
+Then reload your shell (`source ~/.zshrc`) and verify:
+
+```bash
+which increasex
+```
+
+If you stay in the repo directory and skip PATH install, use `./increasex` for CLI commands and `"$(pwd)/increasex"` when registering the MCP — but note that the MCP registration will break if you later move or rename the directory.
 
 ## Authentication
 
@@ -186,22 +223,36 @@ All top-level commands support:
 - `--debug`
 - `--api-key`
 
-### Codex / MCP Flow
+### MCP Host Flow
 
-The recommended Codex flow is:
+Log in and register the server with your agent host, then start a fresh session.
+
+If `increasex` is on your `PATH` (recommended):
+
+**Codex**
 
 ```bash
-./increasex auth login
-./increasex auth status
-codex mcp add increasex -- "$(pwd)/increasex" mcp serve
+increasex auth login
+increasex auth status
+codex mcp add increasex -- increasex mcp serve
 codex
 ```
 
+**Claude Code**
+
+```bash
+increasex auth login
+increasex auth status
+claude mcp add increasex increasex mcp serve
+claude
+```
+
+If you are staying in the repo directory without a PATH install, replace `increasex` with `./increasex` in the CLI commands and `"$(pwd)/increasex"` in the `mcp add` commands.
+
 Important:
 
-- do not manually run `./increasex mcp serve` for normal Codex usage
-- Codex should launch `increasex mcp serve` itself
-- start a fresh Codex session after adding or changing the MCP config
+- do not manually run `./increasex mcp serve` — your agent host launches it
+- start a fresh session after adding or changing the MCP config
 
 That flow continues working across terminal sessions because `increasex` reads the durable local credential file directly.
 
@@ -330,6 +381,8 @@ If you want to force interactive prompts:
 ```
 
 If you use `--json`, interactive UI is suppressed.
+
+Human-readable list commands such as `accounts`, `transactions`, `cards`, `external-accounts`, and transfer lists render as record blocks with labeled fields rather than fixed-width tables so they stay legible in narrow terminals and TUI wrappers.
 
 ## Preview-First Writes
 
@@ -555,6 +608,8 @@ Use `--json` to get stable machine-readable responses:
 ./increasex --json balance --account-id account_xxx
 ```
 
+The non-JSON CLI output is optimized for humans and may change formatting over time. Use `--json` for automation, parsing, and any machine-readable workflows.
+
 Response shape:
 
 ```json
@@ -588,21 +643,27 @@ This server is:
 - `stdio` transport only
 - intended to be launched by an MCP-capable host such as Codex
 
-### Codex Setup
+### Host Setup
 
-Register the server:
+Install the binary to your `PATH` first (see [Install](#install)), then register using the bare command name:
 
-```bash
-codex mcp add increasex -- "$(pwd)/increasex" mcp serve
-```
-
-Check that Codex knows about it:
+**Codex**
 
 ```bash
+codex mcp add increasex -- increasex mcp serve
 codex mcp list
 ```
 
-Then start a fresh Codex session and ask it to list available MCP namespaces or tools.
+**Claude Code**
+
+```bash
+claude mcp add increasex increasex mcp serve
+claude mcp list
+```
+
+If registering without a PATH install, use the full path: `"$(pwd)/increasex"` — but the registration will break if you later move the binary or directory.
+
+Then start a fresh session and ask it to list available MCP namespaces or tools.
 
 ### Manual Debugging
 
@@ -678,7 +739,7 @@ Example MCP transaction filter input:
 
 Compatibility aliases still exist for the older `move_money_*` transfer tool names.
 
-The repository also includes a unified [`increasex` skill](./skills/increasex/SKILL.md) for operating `mcp__increasex` safely and for implementing new IncreaseX features in this repo.
+The repository also includes a unified [`increasex` skill](./SKILL.md) for operating `mcp__increasex` safely and for implementing new IncreaseX features in this repo.
 
 ### Install Skills
 
@@ -753,10 +814,28 @@ Then retry:
 ./increasex accounts
 ```
 
+If the MCP server fails to connect after moving the binary to `/usr/local/bin` (or elsewhere):
+
+The MCP registration recorded the old path. Re-register using the bare command name:
+
+```bash
+claude mcp remove increasex
+claude mcp add increasex increasex mcp serve
+```
+
+Or for Codex:
+
+```bash
+codex mcp remove increasex
+codex mcp add increasex -- increasex mcp serve
+```
+
+Start a fresh session after re-registering.
+
 If `increasex` is “command not found”, either:
 
 - run `./increasex` from the repo root, or
-- move the binary onto your `PATH`
+- move the binary onto your `PATH` (see [Install](#install))
 
 ## Development
 

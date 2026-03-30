@@ -92,11 +92,12 @@ Use this checklist to smoke-test CLI and MCP parity against sandbox credentials.
 - CLI: run `increasex` in a TTY and confirm the root menu appears
 - CLI: run `increasex transfer` in a TTY and confirm the transfer menu appears
 - CLI: confirm Back and Exit options exist in the transfer menu
+- CLI: run `increasex accounts`, `increasex transactions`, `increasex cards`, `increasex external-accounts`, and `increasex transfer list --rail account` and confirm human output renders as labeled record blocks rather than clipped column tables
 - CLI: run `increasex accounts` in a TTY and confirm nested account selectors expose Back and Exit options
 - CLI: run `increasex cards` and `increasex external-accounts` in a TTY and confirm nested selectors expose Back and Exit options
 - CLI: start an interactive write flow with a free-text prompt and confirm typing `back` returns to the previous step
 - CLI: start an interactive write flow with a free-text prompt and confirm typing `exit` returns to the shell
-- CLI: confirm non-TTY or `--json` invocation skips menus
+- CLI: confirm non-TTY or `--json` invocation skips menus, and that `--json` remains the machine-readable output path
 
 ## MCP Discovery
 
