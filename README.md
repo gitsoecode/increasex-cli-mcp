@@ -35,19 +35,13 @@ What this is not:
 
 ## Quick Start
 
-**Step 1 — Build the binary:**
+**Step 1 — Install the binary (recommended):**
 
 ```bash
-GOCACHE=/tmp/increasex-gocache go build -o increasex ./cmd/increasex
+GOCACHE=/tmp/increasex-gocache GOMODCACHE=/tmp/increasex-gomodcache go install github.com/gitsoecode/increasex-cli-mcp/cmd/increasex@latest
 ```
 
-**Step 2 — Install to your PATH** (so you can run `increasex` from anywhere without `./`):
-
-```bash
-sudo mv increasex /usr/local/bin/increasex
-```
-
-On most macOS systems, `/usr/local/bin` requires `sudo`. Alternatively, add the repo directory to your shell `PATH` — see the [Install](#install) section.
+**Step 2 — Verify your PATH and binary:**
 
 Verify it's on your PATH:
 
@@ -107,12 +101,12 @@ You should see `mcp__increasex`.
 
 > **Why this order matters:** MCP hosts record the exact binary path at registration time. If you register with `$(pwd)/increasex` and later move the binary to `/usr/local/bin`, the recorded path breaks and the MCP server fails to connect. Installing to `PATH` first and registering with the bare command name avoids this.
 
-## Build
+## Build from source (optional/dev)
 
 From the repo root:
 
 ```bash
-go build -o increasex ./cmd/increasex
+GOCACHE=/tmp/increasex-gocache go build -o increasex ./cmd/increasex
 ```
 
 You only need to rebuild when the code changes.
@@ -120,16 +114,30 @@ You only need to rebuild when the code changes.
 For one-off runs during development:
 
 ```bash
-go run ./cmd/increasex --help
+./increasex --help
 ```
+
+The installed `go install` flow is the recommended setup for other devices.
 
 ## Install
 
-Install to your `PATH` before registering the MCP server. This lets you use the bare `increasex` command from any directory and ensures the MCP registration stays valid after moving the binary.
-
-**Option A — move to `/usr/local/bin` (recommended):**
+Install the binary to your `PATH` before registering the MCP server. For clean environments, use source install:
 
 ```bash
+GOCACHE=/tmp/increasex-gocache GOMODCACHE=/tmp/increasex-gomodcache go install github.com/gitsoecode/increasex-cli-mcp/cmd/increasex@latest
+```
+
+If needed, confirm:
+
+```bash
+which increasex
+increasex --help
+```
+
+**Option A — move to `/usr/local/bin` (manual/install-from-source path):**
+
+```bash
+go build -o increasex ./cmd/increasex
 sudo mv increasex /usr/local/bin/increasex
 ```
 
@@ -151,6 +159,8 @@ which increasex
 If you stay in the repo directory and skip PATH install, use `./increasex` for CLI commands and `"$(pwd)/increasex"` when registering the MCP — but note that the MCP registration will break if you later move or rename the directory.
 
 ## Authentication
+
+These examples use repo-local invocation (`./increasex`) by default; if you installed the binary to `PATH`, use `increasex` instead.
 
 `increasex` supports two auth patterns:
 
@@ -895,12 +905,20 @@ If `increasex` is “command not found”, either:
 - run `./increasex` from the repo root, or
 - move the binary onto your `PATH` (see [Install](#install))
 
+If this previously failed on another device when running `go build -o increasex ./cmd/increasex`, confirm you are using the install flow from the [Install](#install) section. A stale environment without a buildable `cmd/increasex` package used to cause this symptom; this repository now includes a real `cmd/increasex` entrypoint.
+
 ## Development
 
 Run tests:
 
 ```bash
 GOCACHE=/tmp/increasex-gocache go test ./...
+```
+
+Run lint checks:
+
+```bash
+GOCACHE=/tmp/increasex-gocache go vet ./...
 ```
 
 Build:
