@@ -638,13 +638,7 @@ func (s Services) RetrieveCardDetails(ctx context.Context, api *increasex.Client
 		return nil, "", err
 	}
 	card := normalizeCard(*result.Data)
-	card.BillingDetails = map[string]any{
-		"line1":       maskLine(result.Data.BillingAddress.Line1),
-		"line2":       maskLine(result.Data.BillingAddress.Line2),
-		"city":        result.Data.BillingAddress.City,
-		"state":       result.Data.BillingAddress.State,
-		"postal_code": result.Data.BillingAddress.PostalCode,
-	}
+	card.BillingDetails = normalizeCardBillingDetails(result.Data.BillingAddress, true)
 	return &card, result.RequestID, nil
 }
 
@@ -819,6 +813,9 @@ func (s Services) ExecuteDisableAccountNumber(ctx context.Context, api *increase
 }
 
 func (s Services) PreviewInternalTransfer(session Session, input MoveMoneyInternalInput) (*PreviewResult, error) {
+	if err := validateMoveMoneyInternalInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	if input.Description == "" {
 		effective["description"] = generatedInternalDescription(input)
@@ -840,6 +837,9 @@ func generatedInternalDescription(input MoveMoneyInternalInput) string {
 }
 
 func (s Services) ExecuteInternalTransfer(ctx context.Context, api *increasex.Client, session Session, input MoveMoneyInternalInput) (any, string, error) {
+	if err := validateMoveMoneyInternalInput(input); err != nil {
+		return nil, "", err
+	}
 	effective := effectiveConfirmationPayload(input)
 	description := input.Description
 	if description == "" {
@@ -950,6 +950,9 @@ func (s Services) ExecuteCreateCard(ctx context.Context, api *increasex.Client, 
 }
 
 func (s Services) PreviewExternalACH(session Session, input ACHTransferInput) (*PreviewResult, error) {
+	if err := validateACHTransferInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("move_money_external_ach", session, effective)
 	if err != nil {
@@ -964,11 +967,11 @@ func (s Services) PreviewExternalACH(session Session, input ACHTransferInput) (*
 }
 
 func (s Services) ExecuteExternalACH(ctx context.Context, api *increasex.Client, session Session, input ACHTransferInput) (any, string, error) {
-	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_ach", session, effectiveConfirmationPayload(input)); err != nil {
+	if err := validateACHTransferInput(input); err != nil {
 		return nil, "", err
 	}
-	if input.ExternalAccountID == "" && (input.AccountNumber == "" || input.RoutingNumber == "") {
-		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
+	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_ach", session, effectiveConfirmationPayload(input)); err != nil {
+		return nil, "", err
 	}
 	params := increase.ACHTransferNewParams{
 		AccountID:           increase.String(input.AccountID),
@@ -1027,6 +1030,9 @@ func (s Services) ExecuteExternalACH(ctx context.Context, api *increasex.Client,
 }
 
 func (s Services) PreviewExternalRTP(session Session, input RTPTransferInput) (*PreviewResult, error) {
+	if err := validateRTPTransferInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("move_money_external_rtp", session, effective)
 	if err != nil {
@@ -1041,11 +1047,11 @@ func (s Services) PreviewExternalRTP(session Session, input RTPTransferInput) (*
 }
 
 func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client, session Session, input RTPTransferInput) (any, string, error) {
-	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_rtp", session, effectiveConfirmationPayload(input)); err != nil {
+	if err := validateRTPTransferInput(input); err != nil {
 		return nil, "", err
 	}
-	if strings.TrimSpace(input.SourceAccountNumberID) == "" {
-		return nil, "", sourceAccountNumberRequiredError("source_account_number_id")
+	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_rtp", session, effectiveConfirmationPayload(input)); err != nil {
+		return nil, "", err
 	}
 	params := increase.RealTimePaymentsTransferNewParams{
 		Amount:                            increase.Int(input.AmountCents),
@@ -1090,6 +1096,9 @@ func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client,
 }
 
 func (s Services) PreviewExternalFedNow(session Session, input FedNowTransferInput) (*PreviewResult, error) {
+	if err := validateFedNowTransferInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("move_money_external_fednow", session, effective)
 	if err != nil {
@@ -1104,24 +1113,27 @@ func (s Services) PreviewExternalFedNow(session Session, input FedNowTransferInp
 }
 
 func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Client, session Session, input FedNowTransferInput) (any, string, error) {
+	if err := validateFedNowTransferInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_fednow", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
-	if strings.TrimSpace(input.SourceAccountNumberID) == "" {
-		return nil, "", sourceAccountNumberRequiredError("source_account_number_id")
-	}
-	if input.ExternalAccountID == "" && (input.AccountNumber == "" || input.RoutingNumber == "") {
-		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
-	}
 	params := increase.FednowTransferNewParams{
-		AccountNumber:                     increase.String(input.AccountNumber),
 		Amount:                            increase.Int(input.AmountCents),
 		CreditorName:                      increase.String(input.CreditorName),
 		DebtorName:                        increase.String(input.DebtorName),
-		ExternalAccountID:                 increase.String(input.ExternalAccountID),
-		RoutingNumber:                     increase.String(input.RoutingNumber),
 		SourceAccountNumberID:             increase.String(input.SourceAccountNumberID),
 		UnstructuredRemittanceInformation: increase.String(input.UnstructuredRemittanceInformation),
+	}
+	if input.AccountNumber != "" {
+		params.AccountNumber = increase.String(input.AccountNumber)
+	}
+	if input.ExternalAccountID != "" {
+		params.ExternalAccountID = increase.String(input.ExternalAccountID)
+	}
+	if input.RoutingNumber != "" {
+		params.RoutingNumber = increase.String(input.RoutingNumber)
 	}
 	if input.CreditorAddress != nil {
 		params.CreditorAddress = increase.F(increase.FednowTransferNewParamsCreditorAddress{
@@ -1158,6 +1170,9 @@ func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Clie
 }
 
 func (s Services) PreviewExternalWire(session Session, input WireTransferInput) (*PreviewResult, error) {
+	if err := validateWireTransferInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("move_money_external_wire", session, effective)
 	if err != nil {
@@ -1172,11 +1187,11 @@ func (s Services) PreviewExternalWire(session Session, input WireTransferInput) 
 }
 
 func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client, session Session, input WireTransferInput) (any, string, error) {
-	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_wire", session, effectiveConfirmationPayload(input)); err != nil {
+	if err := validateWireTransferInput(input); err != nil {
 		return nil, "", err
 	}
-	if input.ExternalAccountID == "" && (input.AccountNumber == "" || input.RoutingNumber == "") {
-		return nil, "", util.NewError(util.CodeValidationError, "provide external_account_id or account_number and routing_number", nil, false)
+	if err := s.confirm.Verify(input.ConfirmationToken, "move_money_external_wire", session, effectiveConfirmationPayload(input)); err != nil {
+		return nil, "", err
 	}
 	params := increase.WireTransferNewParams{
 		AccountID: increase.String(input.AccountID),
@@ -1184,12 +1199,14 @@ func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client
 		Creditor: increase.F(increase.WireTransferNewParamsCreditor{
 			Name: increase.String(input.BeneficiaryName),
 		}),
-		Remittance: increase.F(increase.WireTransferNewParamsRemittance{
+	}
+	if input.MessageToRecipient != "" {
+		params.Remittance = increase.F(increase.WireTransferNewParamsRemittance{
 			Category: increase.F(increase.WireTransferNewParamsRemittanceCategoryUnstructured),
 			Unstructured: increase.F(increase.WireTransferNewParamsRemittanceUnstructured{
 				Message: increase.String(input.MessageToRecipient),
 			}),
-		}),
+		})
 	}
 	if input.AccountNumber != "" {
 		params.AccountNumber = increase.String(input.AccountNumber)
@@ -1456,10 +1473,22 @@ func sourceAccountNumberRequiredError(field string) error {
 }
 
 func normalizeCard(card increase.Card) CardSummary {
+	return normalizeCardWithMask(card, true)
+}
+
+func normalizeSensitiveCard(card increase.Card) CardSummary {
+	return normalizeCardWithMask(card, false)
+}
+
+func normalizeCardWithMask(card increase.Card, maskSensitive bool) CardSummary {
+	last4 := card.Last4
+	if maskSensitive {
+		last4 = util.MaskLast4(card.Last4)
+	}
 	return CardSummary{
 		ID:              card.ID,
 		AccountID:       card.AccountID,
-		Last4:           util.MaskLast4(card.Last4),
+		Last4:           last4,
 		Status:          string(card.Status),
 		Description:     card.Description,
 		EntityID:        card.EntityID,
@@ -1467,4 +1496,22 @@ func normalizeCard(card increase.Card) CardSummary {
 		ExpirationYear:  card.ExpirationYear,
 		CreatedAt:       util.RFC3339OrEmpty(card.CreatedAt),
 	}
+}
+
+func normalizeCardBillingDetails(address increase.CardBillingAddress, maskSensitive bool) *CardBillingDetails {
+	details := &CardBillingDetails{
+		City:       address.City,
+		Line1:      address.Line1,
+		Line2:      address.Line2,
+		PostalCode: address.PostalCode,
+		State:      address.State,
+	}
+	if maskSensitive {
+		details.Line1 = maskLine(details.Line1)
+		details.Line2 = maskLine(details.Line2)
+	}
+	if details.City == "" && details.Line1 == "" && details.Line2 == "" && details.PostalCode == "" && details.State == "" {
+		return nil
+	}
+	return details
 }

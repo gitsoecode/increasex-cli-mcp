@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	increase "github.com/Increase/increase-go"
+	"github.com/Increase/increase-go/option"
 	increasex "github.com/gitsoecode/increasex-cli-mcp/internal/increase"
 	"github.com/gitsoecode/increasex-cli-mcp/internal/util"
 )
@@ -162,6 +165,113 @@ func TestPreviewCreateCardRejectsInvalidFields(t *testing.T) {
 	}
 }
 
+func TestRetrieveCardDetailsMasksBillingAddressLines(t *testing.T) {
+	services := NewServices()
+	api := newTestIncreaseClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/cards/card_123" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Request-Id", "req_card")
+		_, _ = w.Write([]byte(`{
+			"id":"card_123",
+			"account_id":"account_123",
+			"billing_address":{"city":"New York","line1":"330 West 58th Street","line2":"Floor 8","postal_code":"10019","state":"NY"},
+			"created_at":"2026-02-18T04:10:18Z",
+			"description":"Company Card",
+			"digital_wallet":null,
+			"entity_id":"entity_123",
+			"expiration_month":2,
+			"expiration_year":2030,
+			"idempotency_key":null,
+			"last4":"9286",
+			"status":"active",
+			"type":"card"
+		}`))
+	})
+
+	card, requestID, err := services.RetrieveCardDetails(context.Background(), api, "card_123")
+	if err != nil {
+		t.Fatalf("RetrieveCardDetails() error = %v", err)
+	}
+	if requestID != "req_card" {
+		t.Fatalf("RetrieveCardDetails() requestID = %q, want %q", requestID, "req_card")
+	}
+	if card.BillingDetails == nil {
+		t.Fatal("RetrieveCardDetails() billing_details = nil, want masked details")
+	}
+	if card.BillingDetails.Line1 == "330 West 58th Street" || !strings.HasPrefix(card.BillingDetails.Line1, "33") || !strings.Contains(card.BillingDetails.Line1, "*") {
+		t.Fatalf("RetrieveCardDetails() line1 = %q, want masked address line", card.BillingDetails.Line1)
+	}
+	if card.BillingDetails.Line2 == "Floor 8" || !strings.HasPrefix(card.BillingDetails.Line2, "Fl") || !strings.Contains(card.BillingDetails.Line2, "*") {
+		t.Fatalf("RetrieveCardDetails() line2 = %q, want masked address line", card.BillingDetails.Line2)
+	}
+	if card.PrimaryAccountNumber != "" || card.VerificationCode != "" || card.PIN != "" {
+		t.Fatalf("RetrieveCardDetails() should omit sensitive card fields, got %#v", card)
+	}
+}
+
+func TestRetrieveSensitiveCardDetailsMergesBaseCardAndSensitiveData(t *testing.T) {
+	services := NewServices()
+	paths := make([]string, 0, 2)
+	api := newTestIncreaseClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/cards/card_123":
+			w.Header().Set("X-Request-Id", "req_card")
+			_, _ = w.Write([]byte(`{
+				"id":"card_123",
+				"account_id":"account_123",
+				"billing_address":{"city":"New York","line1":"330 West 58th Street","line2":"Floor 8","postal_code":"10019","state":"NY"},
+				"created_at":"2026-02-18T04:10:18Z",
+				"description":"Company Card",
+				"digital_wallet":null,
+				"entity_id":"entity_123",
+				"expiration_month":2,
+				"expiration_year":2030,
+				"idempotency_key":null,
+				"last4":"9286",
+				"status":"active",
+				"type":"card"
+			}`))
+		case "/cards/card_123/details":
+			w.Header().Set("X-Request-Id", "req_details")
+			_, _ = w.Write([]byte(`{
+				"card_id":"card_123",
+				"expiration_month":2,
+				"expiration_year":2030,
+				"pin":"1234",
+				"primary_account_number":"4111111111119286",
+				"type":"card_details",
+				"verification_code":"123"
+			}`))
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+
+	card, requestID, err := services.RetrieveSensitiveCardDetails(context.Background(), api, "card_123")
+	if err != nil {
+		t.Fatalf("RetrieveSensitiveCardDetails() error = %v", err)
+	}
+	if requestID != "req_details" {
+		t.Fatalf("RetrieveSensitiveCardDetails() requestID = %q, want %q", requestID, "req_details")
+	}
+	if strings.Join(paths, ",") != "/cards/card_123,/cards/card_123/details" {
+		t.Fatalf("RetrieveSensitiveCardDetails() paths = %v, want card then details", paths)
+	}
+	if card.ID != "card_123" || card.AccountID != "account_123" || card.Description != "Company Card" || card.Status != "active" {
+		t.Fatalf("RetrieveSensitiveCardDetails() summary fields = %#v, want merged card metadata", card)
+	}
+	if card.BillingDetails == nil || card.BillingDetails.Line1 != "330 West 58th Street" || card.BillingDetails.Line2 != "Floor 8" {
+		t.Fatalf("RetrieveSensitiveCardDetails() billing_details = %#v, want unmasked address", card.BillingDetails)
+	}
+	if card.PrimaryAccountNumber != "4111111111119286" || card.VerificationCode != "123" || card.PIN != "1234" {
+		t.Fatalf("RetrieveSensitiveCardDetails() sensitive fields = %#v, want merged PAN/CVV/PIN", card)
+	}
+}
+
 func TestTransferPreviewSummariesReflectApprovalState(t *testing.T) {
 	services := NewServices()
 	session := Session{ProfileName: "default", Environment: "sandbox"}
@@ -189,9 +299,11 @@ func TestTransferPreviewSummariesReflectApprovalState(t *testing.T) {
 			name: "ach immediate",
 			got: func() string {
 				preview, err := services.PreviewExternalACH(session, ACHTransferInput{
-					AccountID:       "account_a",
-					AmountCents:     100,
-					RequireApproval: nil,
+					AccountID:           "account_a",
+					AmountCents:         100,
+					StatementDescriptor: "Payroll",
+					ExternalAccountID:   "external_account_123",
+					RequireApproval:     nil,
 				})
 				return mustPreviewSummary(t, preview, err)
 			},
@@ -201,8 +313,12 @@ func TestTransferPreviewSummariesReflectApprovalState(t *testing.T) {
 			name: "rtp queued",
 			got: func() string {
 				preview, err := services.PreviewExternalRTP(session, RTPTransferInput{
-					AmountCents:     100,
-					RequireApproval: &requireApproval,
+					AmountCents:           100,
+					CreditorName:          "Vendor",
+					RemittanceInformation: "Invoice 1001",
+					SourceAccountNumberID: "account_number_123",
+					ExternalAccountID:     "external_account_123",
+					RequireApproval:       &requireApproval,
 				})
 				return mustPreviewSummary(t, preview, err)
 			},
@@ -212,7 +328,13 @@ func TestTransferPreviewSummariesReflectApprovalState(t *testing.T) {
 			name: "fednow immediate",
 			got: func() string {
 				preview, err := services.PreviewExternalFedNow(session, FedNowTransferInput{
-					AmountCents: 100,
+					AccountID:                         "account_123",
+					AmountCents:                       100,
+					CreditorName:                      "Vendor",
+					DebtorName:                        "Debtor",
+					SourceAccountNumberID:             "account_number_123",
+					UnstructuredRemittanceInformation: "Invoice 1001",
+					ExternalAccountID:                 "external_account_123",
 				})
 				return mustPreviewSummary(t, preview, err)
 			},
@@ -222,8 +344,11 @@ func TestTransferPreviewSummariesReflectApprovalState(t *testing.T) {
 			name: "wire queued",
 			got: func() string {
 				preview, err := services.PreviewExternalWire(session, WireTransferInput{
-					AmountCents:     100,
-					RequireApproval: &requireApproval,
+					AccountID:         "account_123",
+					AmountCents:       100,
+					BeneficiaryName:   "Vendor",
+					ExternalAccountID: "external_account_123",
+					RequireApproval:   &requireApproval,
 				})
 				return mustPreviewSummary(t, preview, err)
 			},
@@ -566,8 +691,10 @@ func TestTransferSourceIdentifierPayloadsMatchRailRequirements(t *testing.T) {
 	session := Session{ProfileName: "default", Environment: "sandbox"}
 
 	achPreview, err := services.PreviewExternalACH(session, ACHTransferInput{
-		AccountID:   "account_123",
-		AmountCents: 100,
+		AccountID:           "account_123",
+		AmountCents:         100,
+		StatementDescriptor: "Payroll",
+		ExternalAccountID:   "external_account_123",
 	})
 	if err != nil {
 		t.Fatalf("PreviewExternalACH() error = %v", err)
@@ -582,7 +709,9 @@ func TestTransferSourceIdentifierPayloadsMatchRailRequirements(t *testing.T) {
 	rtpPreview, err := services.PreviewExternalRTP(session, RTPTransferInput{
 		AmountCents:           100,
 		CreditorName:          "Vendor",
+		RemittanceInformation: "Invoice 1001",
 		SourceAccountNumberID: "account_number_123",
+		ExternalAccountID:     "external_account_123",
 	})
 	if err != nil {
 		t.Fatalf("PreviewExternalRTP() error = %v", err)
@@ -592,11 +721,13 @@ func TestTransferSourceIdentifierPayloadsMatchRailRequirements(t *testing.T) {
 	}
 
 	fedNowPreview, err := services.PreviewExternalFedNow(session, FedNowTransferInput{
-		AccountID:             "account_456",
-		AmountCents:           100,
-		CreditorName:          "Vendor",
-		DebtorName:            "Debtor",
-		SourceAccountNumberID: "account_number_456",
+		AccountID:                         "account_456",
+		AmountCents:                       100,
+		CreditorName:                      "Vendor",
+		DebtorName:                        "Debtor",
+		SourceAccountNumberID:             "account_number_456",
+		UnstructuredRemittanceInformation: "Invoice 1001",
+		ExternalAccountID:                 "external_account_456",
 	})
 	if err != nil {
 		t.Fatalf("PreviewExternalFedNow() error = %v", err)
@@ -613,6 +744,7 @@ func TestTransferSourceIdentifierPayloadsMatchRailRequirements(t *testing.T) {
 		AmountCents:           100,
 		BeneficiaryName:       "Vendor",
 		SourceAccountNumberID: "account_number_789",
+		ExternalAccountID:     "external_account_789",
 	})
 	if err != nil {
 		t.Fatalf("PreviewExternalWire() error = %v", err)
@@ -622,35 +754,46 @@ func TestTransferSourceIdentifierPayloadsMatchRailRequirements(t *testing.T) {
 	}
 }
 
-func TestExecuteExternalTransfersRequireSourceAccountNumberWhenRailDemandsIt(t *testing.T) {
+func TestExternalTransferPreviewValidationRequiresSourceAccountNumberWhenRailDemandsIt(t *testing.T) {
 	services := NewServices()
 	session := Session{ProfileName: "default", Environment: "sandbox"}
 
-	rtpInput := RTPTransferInput{
-		AmountCents:  100,
-		CreditorName: "Vendor",
-	}
-	rtpPreview, err := services.PreviewExternalRTP(session, rtpInput)
-	if err != nil {
-		t.Fatalf("PreviewExternalRTP() error = %v", err)
-	}
-	rtpInput.ConfirmationToken = rtpPreview.ConfirmationToken
-	if _, _, err := services.ExecuteExternalRTP(context.Background(), nil, session, rtpInput); err == nil || !strings.Contains(err.Error(), "source_account_number_id") {
-		t.Fatalf("ExecuteExternalRTP() error = %v, want source_account_number_id guidance", err)
-	}
+	_, err := services.PreviewExternalRTP(session, RTPTransferInput{
+		AmountCents:           100,
+		CreditorName:          "Vendor",
+		RemittanceInformation: "Invoice 1001",
+		ExternalAccountID:     "external_account_123",
+	})
+	assertTransferValidationError(t, err, "source_account_number_id")
 
-	fedNowInput := FedNowTransferInput{
-		AccountID:    "account_123",
-		AmountCents:  100,
-		CreditorName: "Vendor",
-		DebtorName:   "Debtor",
-	}
-	fedNowPreview, err := services.PreviewExternalFedNow(session, fedNowInput)
-	if err != nil {
-		t.Fatalf("PreviewExternalFedNow() error = %v", err)
-	}
-	fedNowInput.ConfirmationToken = fedNowPreview.ConfirmationToken
-	if _, _, err := services.ExecuteExternalFedNow(context.Background(), nil, session, fedNowInput); err == nil || !strings.Contains(err.Error(), "source_account_number_id") {
-		t.Fatalf("ExecuteExternalFedNow() error = %v, want source_account_number_id guidance", err)
-	}
+	_, err = services.PreviewExternalFedNow(session, FedNowTransferInput{
+		AccountID:                         "account_123",
+		AmountCents:                       100,
+		CreditorName:                      "Vendor",
+		DebtorName:                        "Debtor",
+		UnstructuredRemittanceInformation: "Invoice 1001",
+		ExternalAccountID:                 "external_account_123",
+	})
+	assertTransferValidationError(t, err, "source_account_number_id")
+}
+
+func newTestIncreaseClient(t *testing.T, handler http.HandlerFunc) *increasex.Client {
+	t.Helper()
+	return increasex.NewClientWithOptions(
+		option.WithBaseURL("http://increasex.test"),
+		option.WithAPIKey("test_api_key"),
+		option.WithHTTPClient(&http.Client{
+			Transport: roundTripFunc(func(r *http.Request) *http.Response {
+				recorder := httptest.NewRecorder()
+				handler(recorder, r)
+				return recorder.Result()
+			}),
+		}),
+	)
+}
+
+type roundTripFunc func(*http.Request) *http.Response
+
+func (fn roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r), nil
 }

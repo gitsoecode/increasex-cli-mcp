@@ -37,7 +37,7 @@ func newCardsCmd(ctx *Context) *cobra.Command {
 			}
 			actions := []ui.Option{
 				{Label: "Retrieve masked details", Value: "retrieve"},
-				{Label: "Retrieve card details", Value: "details"},
+				{Label: "Retrieve full unmasked details", Value: "details"},
 				{Label: "Create details iframe", Value: "iframe"},
 				{Label: "Create a new card", Value: "create"},
 				{Label: "Update PIN", Value: "update_pin"},
@@ -142,7 +142,7 @@ func newCardsDetailsCmd(ctx *Context) *cobra.Command {
 	var cardID string
 	cmd := &cobra.Command{
 		Use:   "details",
-		Short: "Retrieve card details",
+		Short: "Retrieve full unmasked card details",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, api, err := ctx.resolve(cmd.Context())
 			if err != nil {

@@ -150,6 +150,64 @@ func TestRenderTableAccountShapesStayAligned(t *testing.T) {
 	}
 }
 
+func TestPrintCardsKeepsWideRowsInTableLayout(t *testing.T) {
+	t.Setenv("COLUMNS", "110")
+
+	output := captureStdout(t, func() {
+		printCards([]app.CardSummary{
+			{
+				ID:          "sandbox_card_3tpnskm9qi5tzp73xz37",
+				AccountID:   "sandbox_account_yb31hvngnl6t16os3wma",
+				Last4:       "3925",
+				Status:      "active",
+				Description: "First card created",
+				CreatedAt:   "2026-03-20T04:53:10Z",
+			},
+			{
+				ID:          "sandbox_card_zypnskm9qi5tzp73xz37",
+				AccountID:   "sandbox_account_yb31hvngnl6t16os3wmb",
+				Last4:       "9286",
+				Status:      "active",
+				Description: "Company Card",
+				CreatedAt:   "2026-02-18T04:10:18Z",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 110)
+	if !strings.Contains(output, "LAST4") {
+		t.Fatalf("printCards() should keep the wide table header in normal-width terminals, got %q", output)
+	}
+	if strings.Contains(output, "description:") {
+		t.Fatalf("printCards() should not fall back to compact layout when the table fits, got %q", output)
+	}
+}
+
+func TestPrintCardsFallsBackToCompactLayoutWhenRowsCannotFit(t *testing.T) {
+	t.Setenv("COLUMNS", "84")
+
+	output := captureStdout(t, func() {
+		printCards([]app.CardSummary{
+			{
+				ID:          "sandbox_card_3tpnskm9qi5tzp73xz37",
+				AccountID:   "sandbox_account_yb31hvngnl6t16os3wma",
+				Last4:       "3925",
+				Status:      "active",
+				Description: "First card created for the engineering team with a long label",
+				CreatedAt:   "2026-03-20T04:53:10Z",
+			},
+		})
+	})
+
+	assertRenderedLinesFitWidth(t, output, 84)
+	if !strings.Contains(output, "description:") || !strings.Contains(output, "last4:") {
+		t.Fatalf("printCards() should fall back to the compact key/value layout when the table cannot fit, got %q", output)
+	}
+	if strings.Contains(output, "LAST4") {
+		t.Fatalf("printCards() should not render the wide header row after compact fallback, got %q", output)
+	}
+}
+
 func TestPrintAccountNumbersShowsExplicitFields(t *testing.T) {
 	t.Setenv("COLUMNS", "96")
 
@@ -373,6 +431,18 @@ func TestNewTransferExternalCmdExposesRailSpecificSourceFlags(t *testing.T) {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Fatalf("newTransferExternalCmd() missing flag %q", name)
 		}
+	}
+}
+
+func TestNewTransferExternalCmdUsesRequiredRemittanceHelpText(t *testing.T) {
+	ctx := &Context{Options: &RootOptions{}}
+	cmd := newTransferExternalCmd(ctx)
+
+	if got := cmd.Flags().Lookup("rtp-remittance-information").Usage; got != "required remittance information" {
+		t.Fatalf("rtp-remittance-information usage = %q, want required wording", got)
+	}
+	if got := cmd.Flags().Lookup("fednow-remittance").Usage; got != "required unstructured remittance info" {
+		t.Fatalf("fednow-remittance usage = %q, want required wording", got)
 	}
 }
 

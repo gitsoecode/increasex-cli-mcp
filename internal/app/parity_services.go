@@ -136,18 +136,26 @@ func (s Services) ExecuteUpdateExternalAccount(ctx context.Context, api *increas
 }
 
 func (s Services) RetrieveSensitiveCardDetails(ctx context.Context, api *increasex.Client, cardID string) (*CardDetailsSummary, string, error) {
+	cardResult, err := api.GetCard(ctx, cardID)
+	if err != nil {
+		return nil, "", err
+	}
 	result, err := api.GetCardDetails(ctx, cardID)
 	if err != nil {
 		return nil, "", err
 	}
-	return &CardDetailsSummary{
-		CardID:               result.Data.CardID,
-		ExpirationMonth:      result.Data.ExpirationMonth,
-		ExpirationYear:       result.Data.ExpirationYear,
-		PrimaryAccountNumber: result.Data.PrimaryAccountNumber,
-		VerificationCode:     result.Data.VerificationCode,
-		PIN:                  result.Data.Pin,
-	}, result.RequestID, nil
+	card := normalizeSensitiveCard(*cardResult.Data)
+	card.BillingDetails = normalizeCardBillingDetails(cardResult.Data.BillingAddress, false)
+	card.ExpirationMonth = result.Data.ExpirationMonth
+	card.ExpirationYear = result.Data.ExpirationYear
+	card.PrimaryAccountNumber = result.Data.PrimaryAccountNumber
+	card.VerificationCode = result.Data.VerificationCode
+	card.PIN = result.Data.Pin
+	requestID := result.RequestID
+	if strings.TrimSpace(requestID) == "" {
+		requestID = cardResult.RequestID
+	}
+	return &card, requestID, nil
 }
 
 func (s Services) CreateCardDetailsIframe(ctx context.Context, api *increasex.Client, input CreateCardDetailsIframeInput) (*CardDetailsIframeResult, string, error) {
@@ -279,6 +287,9 @@ func (s Services) RetrieveTransfer(ctx context.Context, api *increasex.Client, r
 }
 
 func (s Services) PreviewApproveTransfer(session Session, input TransferActionInput) (*PreviewResult, error) {
+	if err := validateTransferActionInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("approve_transfer", session, effective)
 	if err != nil {
@@ -293,6 +304,9 @@ func (s Services) PreviewApproveTransfer(session Session, input TransferActionIn
 }
 
 func (s Services) ExecuteApproveTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {
+	if err := validateTransferActionInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "approve_transfer", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}
@@ -333,6 +347,9 @@ func (s Services) ExecuteApproveTransfer(ctx context.Context, api *increasex.Cli
 }
 
 func (s Services) PreviewCancelTransfer(session Session, input TransferActionInput) (*PreviewResult, error) {
+	if err := validateTransferActionInput(input); err != nil {
+		return nil, err
+	}
 	effective := effectiveConfirmationPayload(input)
 	token, err := s.confirm.Generate("cancel_transfer", session, effective)
 	if err != nil {
@@ -347,6 +364,9 @@ func (s Services) PreviewCancelTransfer(session Session, input TransferActionInp
 }
 
 func (s Services) ExecuteCancelTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {
+	if err := validateTransferActionInput(input); err != nil {
+		return nil, "", err
+	}
 	if err := s.confirm.Verify(input.ConfirmationToken, "cancel_transfer", session, effectiveConfirmationPayload(input)); err != nil {
 		return nil, "", err
 	}

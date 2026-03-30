@@ -140,16 +140,27 @@ type ListDocumentsInput struct {
 }
 
 type CardSummary struct {
-	ID              string         `json:"id"`
-	AccountID       string         `json:"account_id"`
-	Last4           string         `json:"last4,omitempty"`
-	Status          string         `json:"status"`
-	Description     string         `json:"description,omitempty"`
-	EntityID        string         `json:"entity_id,omitempty"`
-	ExpirationMonth int64          `json:"expiration_month,omitempty"`
-	ExpirationYear  int64          `json:"expiration_year,omitempty"`
-	CreatedAt       string         `json:"created_at,omitempty"`
-	BillingDetails  map[string]any `json:"billing_details,omitempty"`
+	ID                   string              `json:"id"`
+	AccountID            string              `json:"account_id"`
+	Last4                string              `json:"last4,omitempty"`
+	Status               string              `json:"status"`
+	Description          string              `json:"description,omitempty"`
+	EntityID             string              `json:"entity_id,omitempty"`
+	ExpirationMonth      int64               `json:"expiration_month,omitempty"`
+	ExpirationYear       int64               `json:"expiration_year,omitempty"`
+	CreatedAt            string              `json:"created_at,omitempty"`
+	BillingDetails       *CardBillingDetails `json:"billing_details,omitempty"`
+	PrimaryAccountNumber string              `json:"primary_account_number,omitempty"`
+	VerificationCode     string              `json:"verification_code,omitempty"`
+	PIN                  string              `json:"pin,omitempty"`
+}
+
+type CardBillingDetails struct {
+	City       string `json:"city,omitempty"`
+	Line1      string `json:"line1,omitempty"`
+	Line2      string `json:"line2,omitempty"`
+	PostalCode string `json:"postal_code,omitempty"`
+	State      string `json:"state,omitempty"`
 }
 
 type PreviewResult struct {

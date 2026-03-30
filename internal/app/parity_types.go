@@ -37,14 +37,7 @@ type CardDetailsInput struct {
 	CardID string `json:"card_id"`
 }
 
-type CardDetailsSummary struct {
-	CardID               string `json:"card_id"`
-	ExpirationMonth      int64  `json:"expiration_month"`
-	ExpirationYear       int64  `json:"expiration_year"`
-	PrimaryAccountNumber string `json:"primary_account_number"`
-	VerificationCode     string `json:"verification_code"`
-	PIN                  string `json:"pin"`
-}
+type CardDetailsSummary = CardSummary
 
 type CreateCardDetailsIframeInput struct {
 	CardID         string `json:"card_id"`

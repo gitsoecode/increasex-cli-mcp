@@ -678,23 +678,24 @@ Example MCP transaction filter input:
 
 Compatibility aliases still exist for the older `move_money_*` transfer tool names.
 
-The repository also includes operator-oriented local skills under [`skills/`](./skills) for guardrails, cash ops, account numbers and routing, money movement, approvals, and card workflows.
+The repository also includes a unified [`increasex` skill](./skills/increasex/SKILL.md) for operating `mcp__increasex` safely and for implementing new IncreaseX features in this repo.
 
 ### Install Skills
 
-If you want to install these skills into another Codex environment from GitHub, install the whole skill pack:
+#### General Install
 
 ```bash
-npx skills add --all https://github.com/gitsoecode/increasex-cli-mcp
-```
-
-Install a single skill from the repository:
-
-```bash
-npx skills add https://github.com/gitsoecode/increasex-cli-mcp --skill increasex-operator-guardrails
+npx skills add https://github.com/gitsoecode/increasex-cli-mcp --skill increasex
 ```
 
 Restart Codex after installing new skills so they are picked up in a fresh session.
+
+#### Claude Code Only
+
+```bash
+mkdir -p .claude/skills/increasex
+curl -L https://raw.githubusercontent.com/gitsoecode/increasex-cli-mcp/main/skills/increasex/SKILL.md -o .claude/skills/increasex/SKILL.md
+```
 
 ### MCP Write Pattern
 

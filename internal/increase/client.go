@@ -26,6 +26,10 @@ func NewClient(apiKey, env string) *Client {
 	return &Client{raw: increase.NewClient(opts...)}
 }
 
+func NewClientWithOptions(opts ...option.RequestOption) *Client {
+	return &Client{raw: increase.NewClient(opts...)}
+}
+
 type APIResult[T any] struct {
 	Data      T
 	RequestID string

@@ -513,7 +513,7 @@ func browserOpenCommand(rawURL string) (string, []string, error) {
 
 var (
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("69"))
-	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("24")).Padding(0, 1)
+	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("24"))
 	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("110"))
 	valueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
@@ -591,6 +591,9 @@ func renderTable(title string, headers []string, rows [][]string) string {
 		if !shrunk {
 			break
 		}
+	}
+	if tableRenderedWidth(contentWidths) > available {
+		return renderCompactTable(title, headers, rows)
 	}
 
 	var out strings.Builder
@@ -760,7 +763,7 @@ func sum(values []int) int {
 }
 
 func tableAvailableWidth() int {
-	available := terminalWidth() - 10
+	available := terminalWidth() - 2 - panelStyle.GetHorizontalFrameSize()
 	if available < 24 {
 		return 24
 	}

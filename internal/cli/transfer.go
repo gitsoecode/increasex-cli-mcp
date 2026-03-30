@@ -253,7 +253,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 	cmd.Flags().StringVar(&achInput.ConfirmationToken, "confirmation-token", "", "confirmation token")
 
 	cmd.Flags().StringVar(&rtpInput.CreditorName, "rtp-creditor-name", "", "creditor name")
-	cmd.Flags().StringVar(&rtpInput.RemittanceInformation, "rtp-remittance-information", "", "remittance information")
+	cmd.Flags().StringVar(&rtpInput.RemittanceInformation, "rtp-remittance-information", "", "required remittance information")
 	cmd.Flags().StringVar(&rtpInput.SourceAccountNumberID, "rtp-source-account-number-id", "", "source account number id")
 	cmd.Flags().StringVar(&rtpInput.DestinationAccountNumber, "rtp-destination-account-number", "", "destination account number")
 	cmd.Flags().StringVar(&rtpInput.DestinationRoutingNumber, "rtp-destination-routing-number", "", "destination routing number")
@@ -272,7 +272,7 @@ func newTransferExternalCmd(ctx *Context) *cobra.Command {
 	cmd.Flags().StringVar(&fednowInput.AccountNumber, "fednow-account-number", "", "destination account number")
 	cmd.Flags().StringVar(&fednowInput.RoutingNumber, "fednow-routing-number", "", "routing number")
 	cmd.Flags().StringVar(&fednowInput.ExternalAccountID, "fednow-external-account-id", "", "external account id")
-	cmd.Flags().StringVar(&fednowInput.UnstructuredRemittanceInformation, "fednow-remittance", "", "unstructured remittance info")
+	cmd.Flags().StringVar(&fednowInput.UnstructuredRemittanceInformation, "fednow-remittance", "", "required unstructured remittance info")
 	cmd.Flags().Bool("fednow-require-approval", false, "queue this FedNow transfer for approval")
 	cmd.Flags().StringVar(&fednowInput.IdempotencyKey, "fednow-idempotency-key", "", "idempotency key")
 	cmd.Flags().StringVar(&fednowInput.ConfirmationToken, "fednow-confirmation-token", "", "confirmation token")
@@ -849,7 +849,7 @@ func promptRTPTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.Cli
 				step++
 				continue
 			}
-			input.RemittanceInformation, err = promptStringNavigation("Remittance information (optional)", false)
+			input.RemittanceInformation, err = promptStringNavigation("Remittance information", true)
 			if err != nil {
 				if isNavigateBack(err) {
 					step = max(0, step-1)
@@ -970,7 +970,7 @@ func promptFedNowTransferInput(cmd *cobra.Command, ctx *Context, api *increasex.
 				step++
 				continue
 			}
-			input.UnstructuredRemittanceInformation, err = promptStringNavigation("Unstructured remittance information (optional)", false)
+			input.UnstructuredRemittanceInformation, err = promptStringNavigation("Unstructured remittance information", true)
 			if err != nil {
 				if isNavigateBack(err) {
 					step = max(0, step-1)
