@@ -336,6 +336,8 @@ Retrieve a transfer:
 
 ```bash
 ./increasex transfer retrieve --rail wire --transfer-id wire_transfer_xxx
+./increasex transfer retrieve --transfer-id account_transfer_xxx
+./increasex transfer retrieve --event-id event_xxx
 ```
 
 List the approval queue:
@@ -706,8 +708,8 @@ Read tools:
 - `list_external_accounts`
 - `retrieve_external_account`
 - `list_transfers`
-- `retrieve_transfer`
-- `list_transfer_queue`
+- `retrieve_transfer` using `event_id`, `transfer_id` with an inferable prefix, or `rail` plus `transfer_id`
+- `list_transfer_queue` with preferred rail `account` for internal transfers; `internal` and `account_transfer` are accepted aliases
 
 Write tools:
 
@@ -765,6 +767,40 @@ All MCP writes are preview-first:
 1. Call the tool without `dry_run`, or with `dry_run=true`
 2. Receive preview details and a `confirmation_token`
 3. Call the same tool again with `dry_run=false` and the same effective payload
+
+Example internal transfer queue flow:
+
+```json
+{
+  "name": "create_account_transfer",
+  "arguments": {
+    "from_account_id": "account_source",
+    "to_account_id": "account_destination",
+    "amount_cents": 500,
+    "description": "fund MCP account",
+    "require_approval": true
+  }
+}
+```
+
+Then execute the queued write with the returned token:
+
+```json
+{
+  "name": "create_account_transfer",
+  "arguments": {
+    "from_account_id": "account_source",
+    "to_account_id": "account_destination",
+    "amount_cents": 500,
+    "description": "fund MCP account",
+    "require_approval": true,
+    "confirmation_token": "TOKEN_FROM_PREVIEW",
+    "dry_run": false
+  }
+}
+```
+
+If you send a `confirmation_token` without explicitly setting `dry_run=false`, MCP returns a `validation_error` instead of creating another preview.
 
 That confirmation token is the only intentional cross-call server state in v1.
 

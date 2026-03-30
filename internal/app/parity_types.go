@@ -69,6 +69,30 @@ type TransferSummary struct {
 	Counterparty         string `json:"counterparty,omitempty"`
 }
 
+type TransferDetails struct {
+	TransferSummary
+	Description              string `json:"description,omitempty"`
+	TransactionID            string `json:"transaction_id,omitempty"`
+	DestinationAccountID     string `json:"destination_account_id,omitempty"`
+	DestinationTransactionID string `json:"destination_transaction_id,omitempty"`
+	AccountNumberMasked      string `json:"account_number_masked,omitempty"`
+	RoutingNumber            string `json:"routing_number,omitempty"`
+	SourceAccountNumberID    string `json:"source_account_number_id,omitempty"`
+	StatementDescriptor      string `json:"statement_descriptor,omitempty"`
+	DestinationAccountHolder string `json:"destination_account_holder,omitempty"`
+	IndividualID             string `json:"individual_id,omitempty"`
+	IndividualName           string `json:"individual_name,omitempty"`
+	CompanyName              string `json:"company_name,omitempty"`
+	CompanyEntryDescription  string `json:"company_entry_description,omitempty"`
+	CompanyDescriptiveDate   string `json:"company_descriptive_date,omitempty"`
+	CompanyDiscretionaryData string `json:"company_discretionary_data,omitempty"`
+	CreditorName             string `json:"creditor_name,omitempty"`
+	DebtorName               string `json:"debtor_name,omitempty"`
+	UltimateCreditorName     string `json:"ultimate_creditor_name,omitempty"`
+	UltimateDebtorName       string `json:"ultimate_debtor_name,omitempty"`
+	RemittanceInformation    string `json:"remittance_information,omitempty"`
+}
+
 type ListTransfersInput struct {
 	Rail              string `json:"rail"`
 	AccountID         string `json:"account_id,omitempty"`
@@ -77,6 +101,12 @@ type ListTransfersInput struct {
 	Since             string `json:"since,omitempty"`
 	Cursor            string `json:"cursor,omitempty"`
 	Limit             int64  `json:"limit,omitempty"`
+}
+
+type RetrieveTransferInput struct {
+	Rail       string `json:"rail,omitempty"`
+	TransferID string `json:"transfer_id,omitempty"`
+	EventID    string `json:"event_id,omitempty"`
 }
 
 type TransferActionInput struct {

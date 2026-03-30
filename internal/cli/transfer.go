@@ -39,7 +39,7 @@ func runTransferMenu(cmd *cobra.Command, ctx *Context) error {
 			{Label: "Create an account transfer", Value: "internal", Description: "Move funds between Increase accounts"},
 			{Label: "Create an external transfer", Value: "external", Description: "Send ACH, Real-Time Payments, FedNow, or wire"},
 			{Label: "List transfers", Value: "list", Description: "Review recent transfers by rail"},
-			{Label: "Retrieve a transfer", Value: "retrieve", Description: "Inspect one transfer by rail and id"},
+			{Label: "Retrieve a transfer", Value: "retrieve", Description: "Inspect one transfer by event id, transfer id, or rail and id"},
 			{Label: "View approval queue", Value: "queue", Description: "List pending approval transfers"},
 			{Label: "Approve a transfer", Value: "approve", Description: "Approve a pending transfer"},
 			{Label: "Cancel a transfer", Value: "cancel", Description: "Cancel a transfer"},
@@ -390,24 +390,24 @@ func newTransferListCmd(ctx *Context) *cobra.Command {
 }
 
 func newTransferRetrieveCmd(ctx *Context) *cobra.Command {
-	var rail, transferID string
+	var rail, transferID, eventID string
 	var limit int64
 	cmd := &cobra.Command{
 		Use:   "retrieve",
-		Short: "Retrieve a transfer by rail and id",
+		Short: "Retrieve a transfer by event id, transfer id, or rail and id",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, api, err := ctx.resolve(cmd.Context())
 			if err != nil {
 				return printEnvelopeJSON(nil, "", err)
 			}
-			if rail == "" && isInteractiveRequested(ctx.Options) {
+			if rail == "" && shouldPromptTransferRetrieveRail(transferID, eventID) && isInteractiveRequested(ctx.Options) {
 				rail, err = promptRail("Transfer rail")
 				if err != nil {
 					return bubbleNavigation(cmd, err)
 				}
 			}
 			rail = normalizeTransferRail(rail)
-			if transferID == "" && isInteractiveRequested(ctx.Options) {
+			if transferID == "" && eventID == "" && isInteractiveRequested(ctx.Options) {
 				items, _, err := ctx.Services.ListTransfers(cmd.Context(), api, app.ListTransfersInput{
 					Rail:  rail,
 					Limit: limit,
@@ -420,7 +420,11 @@ func newTransferRetrieveCmd(ctx *Context) *cobra.Command {
 					return bubbleNavigation(cmd, err)
 				}
 			}
-			result, requestID, err := ctx.Services.RetrieveTransfer(cmd.Context(), api, rail, transferID)
+			result, requestID, err := ctx.Services.RetrieveTransfer(cmd.Context(), api, app.RetrieveTransferInput{
+				Rail:       rail,
+				TransferID: transferID,
+				EventID:    eventID,
+			})
 			if ctx.Options.JSON {
 				return printEnvelopeJSON(result, requestID, err)
 			}
@@ -432,8 +436,16 @@ func newTransferRetrieveCmd(ctx *Context) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&rail, "rail", "", "rail: account, ach, real_time_payments, fednow, wire")
 	cmd.Flags().StringVar(&transferID, "transfer-id", "", "transfer id")
+	cmd.Flags().StringVar(&eventID, "event-id", "", "event id for a transfer event")
 	cmd.Flags().Int64Var(&limit, "limit", 20, "maximum transfers to inspect when prompting")
 	return cmd
+}
+
+func shouldPromptTransferRetrieveRail(transferID, eventID string) bool {
+	if strings.TrimSpace(eventID) != "" {
+		return false
+	}
+	return app.InferTransferRailFromTransferID(transferID) == ""
 }
 
 func newTransferQueueCmd(ctx *Context) *cobra.Command {
@@ -1297,18 +1309,7 @@ func promptExternalRail() (string, error) {
 }
 
 func normalizeTransferRail(value string) string {
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "internal":
-		return "account"
-	case "account_transfer":
-		return "account"
-	case "rtp":
-		return "real_time_payments"
-	case "real-time-payments":
-		return "real_time_payments"
-	default:
-		return strings.TrimSpace(strings.ToLower(value))
-	}
+	return app.NormalizeTransferRail(value)
 }
 
 func findTransferSummary(items []app.TransferSummary, transferID string) (app.TransferSummary, bool) {

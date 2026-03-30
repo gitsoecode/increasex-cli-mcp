@@ -73,6 +73,8 @@ Use this checklist to smoke-test CLI and MCP parity against sandbox credentials.
 - CLI: `increasex transfer external --rail wire --dry-run`
 - CLI: `increasex transfer list --rail account`
 - CLI: `increasex transfer retrieve --rail ach --transfer-id ...`
+- CLI: `increasex transfer retrieve --transfer-id account_transfer_...`
+- CLI: `increasex transfer retrieve --event-id event_...`
 - CLI: `increasex transfer queue --rail ach`
 - CLI: `increasex transfer approve --rail ach --transfer-id ... --dry-run`
 - CLI: `increasex transfer cancel --rail ach --transfer-id ... --dry-run`
@@ -82,7 +84,7 @@ Use this checklist to smoke-test CLI and MCP parity against sandbox credentials.
 - MCP: `create_fednow_transfer`
 - MCP: `create_wire_transfer`
 - MCP: `list_transfers`
-- MCP: `retrieve_transfer`
+- MCP: `retrieve_transfer` with `event_id`
 - MCP: `list_transfer_queue`
 - MCP: `approve_transfer`
 - MCP: `cancel_transfer`

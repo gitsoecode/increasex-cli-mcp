@@ -313,79 +313,79 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 	case "create_account":
 		var input app.CreateAccountInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCreateAccount(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCreateAccount(ctx, api, *session, input) })
 	case "close_account":
 		var input app.CloseAccountInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCloseAccount(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCloseAccount(ctx, api, *session, input) })
 	case "create_account_number":
 		var input app.CreateAccountNumberInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCreateAccountNumber(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCreateAccountNumber(ctx, api, *session, input) })
 	case "disable_account_number":
 		var input app.DisableAccountNumberInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewDisableAccountNumber(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteDisableAccountNumber(ctx, api, *session, input) })
 	case "create_account_transfer", "move_money_internal":
 		var input app.MoveMoneyInternalInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewInternalTransfer(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteInternalTransfer(ctx, api, *session, input) })
 	case "create_card":
 		var input app.CreateCardInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCreateCard(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCreateCard(ctx, api, *session, input) })
 	case "create_ach_transfer", "move_money_external_ach":
 		var input app.ACHTransferInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewExternalACH(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteExternalACH(ctx, api, *session, input) })
 	case "create_real_time_payments_transfer", "move_money_external_rtp":
 		var input app.RTPTransferInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewExternalRTP(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteExternalRTP(ctx, api, *session, input) })
 	case "create_fednow_transfer", "move_money_external_fednow":
 		var input app.FedNowTransferInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewExternalFedNow(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteExternalFedNow(ctx, api, *session, input) })
 	case "create_wire_transfer", "move_money_external_wire":
 		var input app.WireTransferInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewExternalWire(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteExternalWire(ctx, api, *session, input) })
 	case "create_external_account":
 		var input app.CreateExternalAccountInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCreateExternalAccount(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCreateExternalAccount(ctx, api, *session, input) })
 	case "update_external_account":
 		var input app.UpdateExternalAccountInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewUpdateExternalAccount(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteUpdateExternalAccount(ctx, api, *session, input) })
 	case "update_card_pin":
 		var input app.UpdateCardPINInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewUpdateCardPIN(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteUpdateCardPIN(ctx, api, *session, input) })
 	case "list_transfers":
@@ -400,7 +400,11 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 		})
 		return envelope(map[string]any{"transfers": result}, requestID, err)
 	case "retrieve_transfer":
-		result, requestID, err := s.services.RetrieveTransfer(ctx, api, asString(args["rail"]), asString(args["transfer_id"]))
+		result, requestID, err := s.services.RetrieveTransfer(ctx, api, app.RetrieveTransferInput{
+			Rail:       asString(args["rail"]),
+			TransferID: asString(args["transfer_id"]),
+			EventID:    asString(args["event_id"]),
+		})
 		return envelope(result, requestID, err)
 	case "list_transfer_queue":
 		result, requestID, err := s.services.ListTransferQueue(ctx, api, asString(args["rail"]), asInt64(args["limit"], 20))
@@ -408,40 +412,43 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 	case "approve_transfer":
 		var input app.TransferActionInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewApproveTransfer(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteApproveTransfer(ctx, api, *session, input) })
 	case "cancel_transfer":
 		var input app.TransferActionInput
 		decodeArgs(args, &input)
-		return s.handleWrite(ctx, *session, api, app.IsDryRun(input.DryRun), input.ConfirmationToken,
+		return s.handleWrite(ctx, *session, api, input.DryRun, input.ConfirmationToken,
 			func() (*app.PreviewResult, error) { return s.services.PreviewCancelTransfer(*session, input) },
 			func() (any, string, error) { return s.services.ExecuteCancelTransfer(ctx, api, *session, input) })
 	case "describe_capabilities":
-		return envelope(map[string]any{
-			"accounts":              []string{"list_accounts", "resolve_account", "get_balance", "create_account", "close_account"},
-			"account_numbers":       []string{"list_account_numbers", "retrieve_account_number", "retrieve_account_number_sensitive_details", "create_account_number", "disable_account_number"},
-			"programs":              []string{"list_programs", "retrieve_program"},
-			"digital_card_profiles": []string{"list_digital_card_profiles", "retrieve_digital_card_profile"},
-			"transactions":          []string{"list_recent_transactions"},
-			"events":                []string{"list_events", "retrieve_event"},
-			"documents":             []string{"list_documents", "retrieve_document"},
-			"cards":                 []string{"list_cards", "retrieve_card_details", "retrieve_card_sensitive_details", "create_card_details_iframe", "create_card", "update_card_pin"},
-			"external_accounts":     []string{"list_external_accounts", "retrieve_external_account", "create_external_account", "update_external_account"},
-			"transfers":             []string{"create_account_transfer", "create_ach_transfer", "create_real_time_payments_transfer", "create_fednow_transfer", "create_wire_transfer", "list_transfers", "retrieve_transfer", "list_transfer_queue", "approve_transfer", "cancel_transfer"},
-		}, "", nil)
+		return envelope(describeCapabilities(), "", nil)
 	default:
 		return util.Fail(util.NewError(util.CodeValidationError, "unknown tool", map[string]any{"tool": name}, false), ""), true
 	}
 }
 
-func (s *Server) handleWrite(ctx context.Context, session app.Session, api *increasex.Client, dryRun bool, confirmationToken string, preview func() (*app.PreviewResult, error), execute func() (any, string, error)) (any, bool) {
-	if dryRun || strings.TrimSpace(confirmationToken) == "" {
+func (s *Server) handleWrite(ctx context.Context, session app.Session, api *increasex.Client, dryRun *bool, confirmationToken string, preview func() (*app.PreviewResult, error), execute func() (any, string, error)) (any, bool) {
+	if strings.TrimSpace(confirmationToken) == "" {
 		result, err := preview()
 		return envelope(result, "", err)
 	}
+	if dryRun == nil || *dryRun {
+		return envelope(nil, "", writeExecutionRequiresExplicitDryRunError())
+	}
 	data, requestID, err := execute()
 	return envelope(data, requestID, err)
+}
+
+func writeExecutionRequiresExplicitDryRunError() error {
+	err := util.NewError(
+		util.CodeValidationError,
+		"confirmation_token requires an explicit execute call; retry the same tool call with dry_run=false",
+		map[string]any{"required_dry_run": false},
+		false,
+	)
+	err.Fields = []util.FieldError{{Field: "dry_run", Message: "must be false when confirmation_token is provided"}}
+	return err
 }
 
 func envelope(data any, requestID string, err error) (any, bool) {
@@ -449,6 +456,42 @@ func envelope(data any, requestID string, err error) (any, bool) {
 		return util.Fail(increasex.WrapError(err), requestID), true
 	}
 	return util.Ok(data, requestID), false
+}
+
+func describeCapabilities() map[string]any {
+	return map[string]any{
+		"accounts":              []string{"list_accounts", "resolve_account", "get_balance", "create_account", "close_account"},
+		"account_numbers":       []string{"list_account_numbers", "retrieve_account_number", "retrieve_account_number_sensitive_details", "create_account_number", "disable_account_number"},
+		"programs":              []string{"list_programs", "retrieve_program"},
+		"digital_card_profiles": []string{"list_digital_card_profiles", "retrieve_digital_card_profile"},
+		"transactions":          []string{"list_recent_transactions"},
+		"events":                []string{"list_events", "retrieve_event"},
+		"documents":             []string{"list_documents", "retrieve_document"},
+		"cards":                 []string{"list_cards", "retrieve_card_details", "retrieve_card_sensitive_details", "create_card_details_iframe", "create_card", "update_card_pin"},
+		"external_accounts":     []string{"list_external_accounts", "retrieve_external_account", "create_external_account", "update_external_account"},
+		"transfers":             []string{"create_account_transfer", "create_ach_transfer", "create_real_time_payments_transfer", "create_fednow_transfer", "create_wire_transfer", "list_transfers", "retrieve_transfer", "list_transfer_queue", "approve_transfer", "cancel_transfer"},
+		"write_pattern": map[string]any{
+			"preview": "Call a write tool without dry_run, or with dry_run=true, to receive a preview and confirmation_token.",
+			"execute": "Call the same tool again with the same effective payload, confirmation_token, and dry_run=false.",
+		},
+		"transfer_rails": map[string]any{
+			"preferred": []string{"account", "ach", "real_time_payments", "fednow", "wire"},
+			"aliases": map[string]string{
+				"internal":           "account",
+				"account_transfer":   "account",
+				"rtp":                "real_time_payments",
+				"real-time-payments": "real_time_payments",
+			},
+		},
+	}
+}
+
+func writeToolDescription(prefix string) string {
+	prefix = strings.TrimSpace(prefix)
+	if !strings.HasSuffix(prefix, ".") {
+		prefix += "."
+	}
+	return prefix + " First call previews. To execute, call again with the same payload, confirmation_token, and dry_run=false."
 }
 
 func (s *Server) tools() []toolDefinition {
@@ -464,10 +507,10 @@ func (s *Server) tools() []toolDefinition {
 		{Name: "list_digital_card_profiles", Description: "Digital card profiles: list available digital wallet artwork profiles", InputSchema: objectSchema(map[string]any{"status": stringSchema(), "idempotency_key": stringSchema(), "limit": intSchema(), "cursor": stringSchema()})},
 		{Name: "retrieve_digital_card_profile", Description: "Digital card profiles: retrieve one digital card profile", InputSchema: requiredSchema(map[string]any{"digital_card_profile_id": stringSchema()}, "digital_card_profile_id")},
 		{Name: "get_balance", Description: "Accounts: retrieve an account balance", InputSchema: requiredSchema(map[string]any{"account_id": stringSchema()}, "account_id")},
-		{Name: "create_account", Description: "Accounts: preview or create an account", InputSchema: objectSchema(map[string]any{"name": stringSchema(), "entity_id": stringSchema(), "informational_entity_id": stringSchema(), "program_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "close_account", Description: "Accounts: preview or close an account", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_account_number", Description: "Account numbers: preview or create an account number", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "name": stringSchema(), "inbound_ach": objectSchema(map[string]any{"debit_status": stringSchema()}), "inbound_checks": objectSchema(map[string]any{"status": stringSchema()}), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "disable_account_number", Description: "Account numbers: preview or disable an account number", InputSchema: objectSchema(map[string]any{"account_number_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_account", Description: writeToolDescription("Accounts: preview or create an account"), InputSchema: objectSchema(map[string]any{"name": stringSchema(), "entity_id": stringSchema(), "informational_entity_id": stringSchema(), "program_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "close_account", Description: writeToolDescription("Accounts: preview or close an account"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_account_number", Description: writeToolDescription("Account numbers: preview or create an account number"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "name": stringSchema(), "inbound_ach": objectSchema(map[string]any{"debit_status": stringSchema()}), "inbound_checks": objectSchema(map[string]any{"status": stringSchema()}), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "disable_account_number", Description: writeToolDescription("Account numbers: preview or disable an account number"), InputSchema: objectSchema(map[string]any{"account_number_id": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
 		{Name: "list_recent_transactions", Description: "Transactions: list recent transactions", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "since": stringSchema(), "until": stringSchema(), "limit": intSchema(), "cursor": stringSchema(), "categories": arraySchema(stringSchema())})},
 		{Name: "list_events", Description: "Events: list Increase events for monitoring and sync workflows", InputSchema: objectSchema(map[string]any{"associated_object_id": stringSchema(), "since": stringSchema(), "until": stringSchema(), "limit": intSchema(), "cursor": stringSchema(), "categories": arraySchema(stringSchema())})},
 		{Name: "retrieve_event", Description: "Events: retrieve one Increase event", InputSchema: requiredSchema(map[string]any{"event_id": stringSchema()}, "event_id")},
@@ -477,27 +520,27 @@ func (s *Server) tools() []toolDefinition {
 		{Name: "retrieve_card_details", Description: "Cards: retrieve masked card details", InputSchema: requiredSchema(map[string]any{"card_id": stringSchema()}, "card_id")},
 		{Name: "retrieve_card_sensitive_details", Description: "Cards: retrieve full unmasked card details", InputSchema: requiredSchema(map[string]any{"card_id": stringSchema()}, "card_id")},
 		{Name: "create_card_details_iframe", Description: "Cards: create details iframe for a card", InputSchema: requiredSchema(map[string]any{"card_id": stringSchema(), "physical_card_id": stringSchema()}, "card_id")},
-		{Name: "create_card", Description: "Cards: preview or create a card", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "description": stringSchema(), "card_program": stringSchema(), "entity_id": stringSchema(), "billing_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "digital_wallet": objectSchema(map[string]any{"digital_card_profile_id": stringSchema(), "email": stringSchema(), "phone": stringSchema()}), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "update_card_pin", Description: "Cards: preview or update a card PIN", InputSchema: objectSchema(map[string]any{"card_id": stringSchema(), "pin": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_card", Description: writeToolDescription("Cards: preview or create a card"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "description": stringSchema(), "card_program": stringSchema(), "entity_id": stringSchema(), "billing_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "digital_wallet": objectSchema(map[string]any{"digital_card_profile_id": stringSchema(), "email": stringSchema(), "phone": stringSchema()}), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "update_card_pin", Description: writeToolDescription("Cards: preview or update a card PIN"), InputSchema: objectSchema(map[string]any{"card_id": stringSchema(), "pin": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
 		{Name: "list_external_accounts", Description: "External accounts: list stored external accounts", InputSchema: objectSchema(map[string]any{"status": stringSchema(), "cursor": stringSchema(), "limit": intSchema()})},
 		{Name: "retrieve_external_account", Description: "External accounts: retrieve one external account", InputSchema: requiredSchema(map[string]any{"external_account_id": stringSchema()}, "external_account_id")},
-		{Name: "create_external_account", Description: "External accounts: preview or create an external account", InputSchema: objectSchema(map[string]any{"account_number": stringSchema(), "description": stringSchema(), "routing_number": stringSchema(), "account_holder": stringSchema(), "funding": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "update_external_account", Description: "External accounts: preview or update an external account", InputSchema: objectSchema(map[string]any{"external_account_id": stringSchema(), "account_holder": stringSchema(), "description": stringSchema(), "funding": stringSchema(), "status": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_external_account", Description: writeToolDescription("External accounts: preview or create an external account"), InputSchema: objectSchema(map[string]any{"account_number": stringSchema(), "description": stringSchema(), "routing_number": stringSchema(), "account_holder": stringSchema(), "funding": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "update_external_account", Description: writeToolDescription("External accounts: preview or update an external account"), InputSchema: objectSchema(map[string]any{"external_account_id": stringSchema(), "account_holder": stringSchema(), "description": stringSchema(), "funding": stringSchema(), "status": stringSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
 		{Name: "list_transfers", Description: "Transfers: list transfers by rail and status", InputSchema: requiredSchema(map[string]any{"rail": stringSchema(), "account_id": stringSchema(), "external_account_id": stringSchema(), "status": stringSchema(), "since": stringSchema(), "cursor": stringSchema(), "limit": intSchema()}, "rail")},
-		{Name: "retrieve_transfer", Description: "Transfers: retrieve a transfer by rail and id", InputSchema: requiredSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema()}, "rail", "transfer_id")},
-		{Name: "list_transfer_queue", Description: "Transfers: list pending approval queue entries for a rail", InputSchema: requiredSchema(map[string]any{"rail": stringSchema(), "limit": intSchema()}, "rail")},
-		{Name: "approve_transfer", Description: "Transfers: preview or approve a pending transfer", InputSchema: objectSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "cancel_transfer", Description: "Transfers: preview or cancel a pending transfer", InputSchema: objectSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_account_transfer", Description: "Transfers: preview or create an account transfer; set require_approval=true to queue for approval instead of submitting immediately", InputSchema: objectSchema(map[string]any{"from_account_id": stringSchema(), "to_account_id": stringSchema(), "amount_cents": intSchema(), "description": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_ach_transfer", Description: "Transfers: preview or create an ACH transfer; set require_approval=true to queue for approval instead of submitting immediately", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "statement_descriptor": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "funding": stringSchema(), "destination_account_holder": stringSchema(), "individual_id": stringSchema(), "individual_name": stringSchema(), "company_name": stringSchema(), "company_entry_description": stringSchema(), "company_descriptive_date": stringSchema(), "company_discretionary_data": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_real_time_payments_transfer", Description: "Transfers: preview or create a Real-Time Payments transfer; set require_approval=true to queue for approval instead of submitting immediately", InputSchema: objectSchema(map[string]any{"amount_cents": intSchema(), "creditor_name": stringSchema(), "remittance_information": stringSchema(), "source_account_number_id": stringSchema(), "debtor_name": stringSchema(), "destination_account_number": stringSchema(), "destination_routing_number": stringSchema(), "external_account_id": stringSchema(), "ultimate_creditor_name": stringSchema(), "ultimate_debtor_name": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_fednow_transfer", Description: "Transfers: preview or create a FedNow transfer; set require_approval=true to queue for approval instead of submitting immediately", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "creditor_name": stringSchema(), "debtor_name": stringSchema(), "source_account_number_id": stringSchema(), "unstructured_remittance_information": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "creditor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "debtor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "create_wire_transfer", Description: "Transfers: preview or create a wire transfer; set require_approval=true to queue for approval instead of submitting immediately", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "beneficiary_name": stringSchema(), "message_to_recipient": stringSchema(), "source_account_number_id": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "beneficiary_address_line1": stringSchema(), "beneficiary_address_line2": stringSchema(), "beneficiary_address_line3": stringSchema(), "originator_name": stringSchema(), "originator_address_line1": stringSchema(), "originator_address_line2": stringSchema(), "originator_address_line3": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "move_money_internal", Description: "Compatibility alias for create_account_transfer", InputSchema: objectSchema(map[string]any{"from_account_id": stringSchema(), "to_account_id": stringSchema(), "amount_cents": intSchema(), "description": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "move_money_external_ach", Description: "Compatibility alias for create_ach_transfer", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "statement_descriptor": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "funding": stringSchema(), "destination_account_holder": stringSchema(), "individual_id": stringSchema(), "individual_name": stringSchema(), "company_name": stringSchema(), "company_entry_description": stringSchema(), "company_descriptive_date": stringSchema(), "company_discretionary_data": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "move_money_external_rtp", Description: "Compatibility alias for create_real_time_payments_transfer", InputSchema: objectSchema(map[string]any{"amount_cents": intSchema(), "creditor_name": stringSchema(), "remittance_information": stringSchema(), "source_account_number_id": stringSchema(), "debtor_name": stringSchema(), "destination_account_number": stringSchema(), "destination_routing_number": stringSchema(), "external_account_id": stringSchema(), "ultimate_creditor_name": stringSchema(), "ultimate_debtor_name": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "move_money_external_fednow", Description: "Compatibility alias for create_fednow_transfer", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "creditor_name": stringSchema(), "debtor_name": stringSchema(), "source_account_number_id": stringSchema(), "unstructured_remittance_information": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "creditor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "debtor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
-		{Name: "move_money_external_wire", Description: "Compatibility alias for create_wire_transfer", InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "beneficiary_name": stringSchema(), "message_to_recipient": stringSchema(), "source_account_number_id": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "beneficiary_address_line1": stringSchema(), "beneficiary_address_line2": stringSchema(), "beneficiary_address_line3": stringSchema(), "originator_name": stringSchema(), "originator_address_line1": stringSchema(), "originator_address_line2": stringSchema(), "originator_address_line3": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "retrieve_transfer", Description: "Transfers: retrieve a transfer by event_id, by transfer_id when its prefix implies the rail, or by an explicit rail plus transfer_id. Event-derived associated object ids are supported when they reference transfer objects.", InputSchema: objectSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema(), "event_id": stringSchema()})},
+		{Name: "list_transfer_queue", Description: "Transfers: list pending approval queue entries for a rail. Use rail account for internal transfers; internal and account_transfer are accepted aliases.", InputSchema: requiredSchema(map[string]any{"rail": stringSchema(), "limit": intSchema()}, "rail")},
+		{Name: "approve_transfer", Description: writeToolDescription("Transfers: preview or approve a pending transfer"), InputSchema: objectSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "cancel_transfer", Description: writeToolDescription("Transfers: preview or cancel a pending transfer"), InputSchema: objectSchema(map[string]any{"rail": stringSchema(), "transfer_id": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_account_transfer", Description: writeToolDescription("Transfers: preview or create an account transfer; set require_approval=true to queue for approval instead of submitting immediately"), InputSchema: objectSchema(map[string]any{"from_account_id": stringSchema(), "to_account_id": stringSchema(), "amount_cents": intSchema(), "description": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_ach_transfer", Description: writeToolDescription("Transfers: preview or create an ACH transfer; set require_approval=true to queue for approval instead of submitting immediately"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "statement_descriptor": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "funding": stringSchema(), "destination_account_holder": stringSchema(), "individual_id": stringSchema(), "individual_name": stringSchema(), "company_name": stringSchema(), "company_entry_description": stringSchema(), "company_descriptive_date": stringSchema(), "company_discretionary_data": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_real_time_payments_transfer", Description: writeToolDescription("Transfers: preview or create a Real-Time Payments transfer; set require_approval=true to queue for approval instead of submitting immediately"), InputSchema: objectSchema(map[string]any{"amount_cents": intSchema(), "creditor_name": stringSchema(), "remittance_information": stringSchema(), "source_account_number_id": stringSchema(), "debtor_name": stringSchema(), "destination_account_number": stringSchema(), "destination_routing_number": stringSchema(), "external_account_id": stringSchema(), "ultimate_creditor_name": stringSchema(), "ultimate_debtor_name": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_fednow_transfer", Description: writeToolDescription("Transfers: preview or create a FedNow transfer; set require_approval=true to queue for approval instead of submitting immediately"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "creditor_name": stringSchema(), "debtor_name": stringSchema(), "source_account_number_id": stringSchema(), "unstructured_remittance_information": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "creditor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "debtor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "create_wire_transfer", Description: writeToolDescription("Transfers: preview or create a wire transfer; set require_approval=true to queue for approval instead of submitting immediately"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "beneficiary_name": stringSchema(), "message_to_recipient": stringSchema(), "source_account_number_id": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "beneficiary_address_line1": stringSchema(), "beneficiary_address_line2": stringSchema(), "beneficiary_address_line3": stringSchema(), "originator_name": stringSchema(), "originator_address_line1": stringSchema(), "originator_address_line2": stringSchema(), "originator_address_line3": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "move_money_internal", Description: writeToolDescription("Compatibility alias for create_account_transfer"), InputSchema: objectSchema(map[string]any{"from_account_id": stringSchema(), "to_account_id": stringSchema(), "amount_cents": intSchema(), "description": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "move_money_external_ach", Description: writeToolDescription("Compatibility alias for create_ach_transfer"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "statement_descriptor": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "funding": stringSchema(), "destination_account_holder": stringSchema(), "individual_id": stringSchema(), "individual_name": stringSchema(), "company_name": stringSchema(), "company_entry_description": stringSchema(), "company_descriptive_date": stringSchema(), "company_discretionary_data": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "move_money_external_rtp", Description: writeToolDescription("Compatibility alias for create_real_time_payments_transfer"), InputSchema: objectSchema(map[string]any{"amount_cents": intSchema(), "creditor_name": stringSchema(), "remittance_information": stringSchema(), "source_account_number_id": stringSchema(), "debtor_name": stringSchema(), "destination_account_number": stringSchema(), "destination_routing_number": stringSchema(), "external_account_id": stringSchema(), "ultimate_creditor_name": stringSchema(), "ultimate_debtor_name": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "move_money_external_fednow", Description: writeToolDescription("Compatibility alias for create_fednow_transfer"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "creditor_name": stringSchema(), "debtor_name": stringSchema(), "source_account_number_id": stringSchema(), "unstructured_remittance_information": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "creditor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "debtor_address": objectSchema(map[string]any{"city": stringSchema(), "line1": stringSchema(), "line2": stringSchema(), "postal_code": stringSchema(), "state": stringSchema()}), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
+		{Name: "move_money_external_wire", Description: writeToolDescription("Compatibility alias for create_wire_transfer"), InputSchema: objectSchema(map[string]any{"account_id": stringSchema(), "amount_cents": intSchema(), "beneficiary_name": stringSchema(), "message_to_recipient": stringSchema(), "source_account_number_id": stringSchema(), "account_number": stringSchema(), "routing_number": stringSchema(), "external_account_id": stringSchema(), "beneficiary_address_line1": stringSchema(), "beneficiary_address_line2": stringSchema(), "beneficiary_address_line3": stringSchema(), "originator_name": stringSchema(), "originator_address_line1": stringSchema(), "originator_address_line2": stringSchema(), "originator_address_line3": stringSchema(), "require_approval": boolSchema(), "idempotency_key": stringSchema(), "dry_run": boolSchema(), "confirmation_token": stringSchema()})},
 	}
 }
 

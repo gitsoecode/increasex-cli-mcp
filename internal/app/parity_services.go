@@ -210,6 +210,7 @@ func (s Services) ExecuteUpdateCardPIN(ctx context.Context, api *increasex.Clien
 }
 
 func (s Services) ListTransfers(ctx context.Context, api *increasex.Client, input ListTransfersInput) ([]TransferSummary, string, error) {
+	input.Rail = NormalizeTransferRail(input.Rail)
 	switch input.Rail {
 	case "account":
 		return s.listAccountTransfers(ctx, api, input)
@@ -227,6 +228,7 @@ func (s Services) ListTransfers(ctx context.Context, api *increasex.Client, inpu
 }
 
 func (s Services) ListTransferQueue(ctx context.Context, api *increasex.Client, rail string, limit int64) ([]TransferSummary, string, error) {
+	rail = NormalizeTransferRail(rail)
 	items, requestID, err := s.ListTransfers(ctx, api, ListTransfersInput{
 		Rail:   rail,
 		Status: "pending_approval",
@@ -244,49 +246,143 @@ func (s Services) ListTransferQueue(ctx context.Context, api *increasex.Client, 
 	return filtered, requestID, nil
 }
 
-func (s Services) RetrieveTransfer(ctx context.Context, api *increasex.Client, rail, transferID string) (*TransferSummary, string, error) {
+func (s Services) RetrieveTransfer(ctx context.Context, api *increasex.Client, input RetrieveTransferInput) (*TransferDetails, string, error) {
+	rail, transferID, initialRequestID, err := s.resolveTransferRetrieval(ctx, api, input)
+	if err != nil {
+		return nil, initialRequestID, err
+	}
 	switch rail {
 	case "account":
 		result, err := api.GetInternalTransfer(ctx, transferID)
 		if err != nil {
 			return nil, "", err
 		}
-		summary := normalizeAccountTransfer(*result.Data)
-		return &summary, result.RequestID, nil
+		details := normalizeAccountTransferDetails(*result.Data)
+		return &details, firstNonEmpty(result.RequestID, initialRequestID), nil
 	case "ach":
 		result, err := api.GetACHTransfer(ctx, transferID)
 		if err != nil {
 			return nil, "", err
 		}
-		summary := normalizeACHTransfer(*result.Data)
-		return &summary, result.RequestID, nil
+		details := normalizeACHTransferDetails(*result.Data)
+		return &details, firstNonEmpty(result.RequestID, initialRequestID), nil
 	case "real_time_payments":
 		result, err := api.GetRTPTransfer(ctx, transferID)
 		if err != nil {
 			return nil, "", err
 		}
-		summary := normalizeRTPTransfer(*result.Data)
-		return &summary, result.RequestID, nil
+		details := normalizeRTPTransferDetails(*result.Data)
+		return &details, firstNonEmpty(result.RequestID, initialRequestID), nil
 	case "fednow":
 		result, err := api.GetFedNowTransfer(ctx, transferID)
 		if err != nil {
 			return nil, "", err
 		}
-		summary := normalizeFedNowTransfer(*result.Data)
-		return &summary, result.RequestID, nil
+		details := normalizeFedNowTransferDetails(*result.Data)
+		return &details, firstNonEmpty(result.RequestID, initialRequestID), nil
 	case "wire":
 		result, err := api.GetWireTransfer(ctx, transferID)
 		if err != nil {
 			return nil, "", err
 		}
-		summary := normalizeWireTransfer(*result.Data)
-		return &summary, result.RequestID, nil
+		details := normalizeWireTransferDetails(*result.Data)
+		return &details, firstNonEmpty(result.RequestID, initialRequestID), nil
 	default:
 		return nil, "", util.NewError(util.CodeValidationError, "unsupported rail", map[string]any{"rail": rail}, false)
 	}
 }
 
+func (s Services) resolveTransferRetrieval(ctx context.Context, api *increasex.Client, input RetrieveTransferInput) (string, string, string, error) {
+	rail := NormalizeTransferRail(input.Rail)
+	transferID := strings.TrimSpace(input.TransferID)
+	eventID := strings.TrimSpace(input.EventID)
+	requestID := ""
+
+	if eventID != "" {
+		eventResult, err := api.GetEvent(ctx, eventID)
+		if err != nil {
+			return "", "", "", err
+		}
+		requestID = eventResult.RequestID
+		eventRail, err := transferRailFromAssociatedObjectType(eventResult.Data.AssociatedObjectType)
+		if err != nil {
+			return "", "", requestID, invalidTransferLookup(
+				"event_id must reference a transfer event",
+				map[string]any{
+					"event_id":               eventID,
+					"associated_object_id":   eventResult.Data.AssociatedObjectID,
+					"associated_object_type": eventResult.Data.AssociatedObjectType,
+				},
+				util.FieldError{Field: "event_id", Message: "must reference a transfer event"},
+			)
+		}
+		if transferID != "" && transferID != eventResult.Data.AssociatedObjectID {
+			return "", "", requestID, invalidTransferLookup(
+				"transfer_id does not match the event's associated object",
+				map[string]any{
+					"event_id":             eventID,
+					"transfer_id":          transferID,
+					"associated_object_id": eventResult.Data.AssociatedObjectID,
+				},
+				util.FieldError{Field: "transfer_id", Message: "must match the event's associated object id"},
+			)
+		}
+		if rail != "" && rail != eventRail {
+			return "", "", requestID, invalidTransferLookup(
+				"rail does not match the event's associated object type",
+				map[string]any{
+					"event_id":               eventID,
+					"rail":                   rail,
+					"associated_object_type": eventResult.Data.AssociatedObjectType,
+				},
+				util.FieldError{Field: "rail", Message: "must match the event's transfer rail"},
+			)
+		}
+		rail = eventRail
+		transferID = eventResult.Data.AssociatedObjectID
+	}
+
+	if inferredRail := InferTransferRailFromTransferID(transferID); inferredRail != "" {
+		if rail == "" {
+			rail = inferredRail
+		} else if rail != inferredRail {
+			return "", "", requestID, invalidTransferLookup(
+				"rail does not match the transfer_id prefix",
+				map[string]any{
+					"rail":        rail,
+					"transfer_id": transferID,
+				},
+				util.FieldError{Field: "rail", Message: "must match the transfer_id prefix"},
+			)
+		}
+	}
+
+	if rail == "" || transferID == "" {
+		fields := []util.FieldError{}
+		if rail == "" {
+			fields = append(fields, util.FieldError{Field: "rail", Message: "is required unless event_id or transfer_id can infer it"})
+		}
+		if transferID == "" {
+			fields = append(fields, util.FieldError{Field: "transfer_id", Message: "is required unless event_id resolves it"})
+		}
+		return "", "", requestID, invalidTransferLookup(
+			"provide event_id, transfer_id with an inferable prefix, or rail plus transfer_id",
+			map[string]any{
+				"accepted_inputs": []string{
+					"event_id",
+					"transfer_id with an inferable prefix",
+					"rail plus transfer_id",
+				},
+			},
+			fields...,
+		)
+	}
+
+	return rail, transferID, requestID, nil
+}
+
 func (s Services) PreviewApproveTransfer(session Session, input TransferActionInput) (*PreviewResult, error) {
+	input.Rail = NormalizeTransferRail(input.Rail)
 	if err := validateTransferActionInput(input); err != nil {
 		return nil, err
 	}
@@ -304,6 +400,7 @@ func (s Services) PreviewApproveTransfer(session Session, input TransferActionIn
 }
 
 func (s Services) ExecuteApproveTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {
+	input.Rail = NormalizeTransferRail(input.Rail)
 	if err := validateTransferActionInput(input); err != nil {
 		return nil, "", err
 	}
@@ -347,6 +444,7 @@ func (s Services) ExecuteApproveTransfer(ctx context.Context, api *increasex.Cli
 }
 
 func (s Services) PreviewCancelTransfer(session Session, input TransferActionInput) (*PreviewResult, error) {
+	input.Rail = NormalizeTransferRail(input.Rail)
 	if err := validateTransferActionInput(input); err != nil {
 		return nil, err
 	}
@@ -364,6 +462,7 @@ func (s Services) PreviewCancelTransfer(session Session, input TransferActionInp
 }
 
 func (s Services) ExecuteCancelTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {
+	input.Rail = NormalizeTransferRail(input.Rail)
 	if err := validateTransferActionInput(input); err != nil {
 		return nil, "", err
 	}
@@ -616,6 +715,16 @@ func normalizeAccountTransfer(transfer increase.AccountTransfer) TransferSummary
 	}
 }
 
+func normalizeAccountTransferDetails(transfer increase.AccountTransfer) TransferDetails {
+	return TransferDetails{
+		TransferSummary:          normalizeAccountTransfer(transfer),
+		Description:              transfer.Description,
+		TransactionID:            transfer.TransactionID,
+		DestinationAccountID:     transfer.DestinationAccountID,
+		DestinationTransactionID: transfer.DestinationTransactionID,
+	}
+}
+
 func normalizeACHTransfer(transfer increase.ACHTransfer) TransferSummary {
 	return TransferSummary{
 		Rail:                 "ach",
@@ -627,6 +736,23 @@ func normalizeACHTransfer(transfer increase.ACHTransfer) TransferSummary {
 		ExternalAccountID:    transfer.ExternalAccountID,
 		PendingTransactionID: transfer.PendingTransactionID,
 		Counterparty:         firstNonEmpty(transfer.IndividualName, transfer.CompanyName, transfer.StatementDescriptor),
+	}
+}
+
+func normalizeACHTransferDetails(transfer increase.ACHTransfer) TransferDetails {
+	return TransferDetails{
+		TransferSummary:          normalizeACHTransfer(transfer),
+		AccountNumberMasked:      util.MaskAccountNumber(transfer.AccountNumber),
+		RoutingNumber:            transfer.RoutingNumber,
+		TransactionID:            transfer.TransactionID,
+		StatementDescriptor:      transfer.StatementDescriptor,
+		DestinationAccountHolder: string(transfer.DestinationAccountHolder),
+		IndividualID:             transfer.IndividualID,
+		IndividualName:           transfer.IndividualName,
+		CompanyName:              transfer.CompanyName,
+		CompanyEntryDescription:  transfer.CompanyEntryDescription,
+		CompanyDescriptiveDate:   transfer.CompanyDescriptiveDate,
+		CompanyDiscretionaryData: transfer.CompanyDiscretionaryData,
 	}
 }
 
@@ -644,6 +770,21 @@ func normalizeRTPTransfer(transfer increase.RealTimePaymentsTransfer) TransferSu
 	}
 }
 
+func normalizeRTPTransferDetails(transfer increase.RealTimePaymentsTransfer) TransferDetails {
+	return TransferDetails{
+		TransferSummary:       normalizeRTPTransfer(transfer),
+		AccountNumberMasked:   util.MaskAccountNumber(transfer.AccountNumber),
+		RoutingNumber:         transfer.RoutingNumber,
+		SourceAccountNumberID: transfer.SourceAccountNumberID,
+		TransactionID:         transfer.TransactionID,
+		CreditorName:          transfer.CreditorName,
+		DebtorName:            transfer.DebtorName,
+		UltimateCreditorName:  transfer.UltimateCreditorName,
+		UltimateDebtorName:    transfer.UltimateDebtorName,
+		RemittanceInformation: transfer.UnstructuredRemittanceInformation,
+	}
+}
+
 func normalizeFedNowTransfer(transfer increase.FednowTransfer) TransferSummary {
 	return TransferSummary{
 		Rail:                 "fednow",
@@ -658,6 +799,19 @@ func normalizeFedNowTransfer(transfer increase.FednowTransfer) TransferSummary {
 	}
 }
 
+func normalizeFedNowTransferDetails(transfer increase.FednowTransfer) TransferDetails {
+	return TransferDetails{
+		TransferSummary:       normalizeFedNowTransfer(transfer),
+		AccountNumberMasked:   util.MaskAccountNumber(transfer.AccountNumber),
+		RoutingNumber:         transfer.RoutingNumber,
+		SourceAccountNumberID: transfer.SourceAccountNumberID,
+		TransactionID:         transfer.TransactionID,
+		CreditorName:          transfer.CreditorName,
+		DebtorName:            transfer.DebtorName,
+		RemittanceInformation: transfer.UnstructuredRemittanceInformation,
+	}
+}
+
 func normalizeWireTransfer(transfer increase.WireTransfer) TransferSummary {
 	return TransferSummary{
 		Rail:                 "wire",
@@ -669,6 +823,19 @@ func normalizeWireTransfer(transfer increase.WireTransfer) TransferSummary {
 		ExternalAccountID:    transfer.ExternalAccountID,
 		PendingTransactionID: transfer.PendingTransactionID,
 		Counterparty:         transfer.Creditor.Name,
+	}
+}
+
+func normalizeWireTransferDetails(transfer increase.WireTransfer) TransferDetails {
+	return TransferDetails{
+		TransferSummary:       normalizeWireTransfer(transfer),
+		AccountNumberMasked:   util.MaskAccountNumber(transfer.AccountNumber),
+		RoutingNumber:         transfer.RoutingNumber,
+		SourceAccountNumberID: transfer.SourceAccountNumberID,
+		TransactionID:         transfer.TransactionID,
+		CreditorName:          transfer.Creditor.Name,
+		DebtorName:            transfer.Debtor.Name,
+		RemittanceInformation: wireRemittanceMessage(transfer.Remittance),
 	}
 }
 
@@ -689,11 +856,61 @@ func filterTransferSummaries(items []TransferSummary, input ListTransfersInput) 
 	return filtered
 }
 
+func InferTransferRailFromTransferID(transferID string) string {
+	switch {
+	case strings.HasPrefix(strings.TrimSpace(transferID), "account_transfer_"):
+		return "account"
+	case strings.HasPrefix(strings.TrimSpace(transferID), "ach_transfer_"):
+		return "ach"
+	case strings.HasPrefix(strings.TrimSpace(transferID), "real_time_payments_transfer_"):
+		return "real_time_payments"
+	case strings.HasPrefix(strings.TrimSpace(transferID), "fednow_transfer_"):
+		return "fednow"
+	case strings.HasPrefix(strings.TrimSpace(transferID), "wire_transfer_"):
+		return "wire"
+	default:
+		return ""
+	}
+}
+
+func transferRailFromAssociatedObjectType(objectType string) (string, error) {
+	switch strings.TrimSpace(objectType) {
+	case "account_transfer":
+		return "account", nil
+	case "ach_transfer":
+		return "ach", nil
+	case "real_time_payments_transfer":
+		return "real_time_payments", nil
+	case "fednow_transfer":
+		return "fednow", nil
+	case "wire_transfer":
+		return "wire", nil
+	default:
+		return "", fmt.Errorf("unsupported associated object type %q", objectType)
+	}
+}
+
+func invalidTransferLookup(message string, details map[string]any, fields ...util.FieldError) error {
+	return &util.ErrorDetail{
+		Code:    util.CodeValidationError,
+		Message: message,
+		Details: details,
+		Fields:  fields,
+	}
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
 			return value
 		}
+	}
+	return ""
+}
+
+func wireRemittanceMessage(remittance increase.WireTransferRemittance) string {
+	if remittance.Category == increase.WireTransferRemittanceCategoryUnstructured {
+		return remittance.Unstructured.Message
 	}
 	return ""
 }

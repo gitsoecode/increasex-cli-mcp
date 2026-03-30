@@ -180,7 +180,7 @@ func validateTransferActionInput(input TransferActionInput) error {
 	fields := []util.FieldError{}
 	addRequiredStringField(&fields, "rail", input.Rail)
 	addRequiredStringField(&fields, "transfer_id", input.TransferID)
-	if value := strings.TrimSpace(input.Rail); value != "" && !isSupportedTransferRail(value) {
+	if value := NormalizeTransferRail(input.Rail); value != "" && !isSupportedTransferRail(value) {
 		fields = append(fields, util.FieldError{Field: "rail", Message: "must be one of account, ach, real_time_payments, fednow, or wire"})
 	}
 	return transferValidationError("Please correct the highlighted transfer action fields.", fields)
@@ -336,7 +336,7 @@ func hasAnyTrimmedValue(values ...string) bool {
 }
 
 func isSupportedTransferRail(rail string) bool {
-	switch rail {
+	switch NormalizeTransferRail(rail) {
 	case "account", "ach", "real_time_payments", "fednow", "wire":
 		return true
 	default:

@@ -23,6 +23,8 @@ Use this as the default playbook for both operator workflows and repository deve
    This includes transfers, approvals, cancellations, account closure, disabling account numbers, and PIN updates.
 7. Prefer the narrowest resource-shaped tool.
    Use `create_account_transfer` and `create_ach_transfer` instead of compatibility aliases when possible.
+8. When an `mcp__increasex` write tool returns a preview response, restate that preview in a short human-readable format before asking for confirmation.
+   Use only fields present in the MCP response plus already-known user context. Do not fabricate or synthesize a preview if the MCP did not return one. Keep masked values masked.
 
 ## Operator Workflows
 
@@ -61,7 +63,8 @@ Use this as the default playbook for both operator workflows and repository deve
    RTP, FedNow, and some wire flows need `source_account_number_id`. ACH and wire flows may use either an `external_account_id` or raw bank details.
 5. Generate a preview first.
    Keep `require_approval=true` when the user wants a queued transfer instead of immediate execution.
-6. Before execution, restate the exact rail, amount, source, destination, and approval mode.
+6. If the MCP returns a preview, restate it in a short human-readable format before asking for confirmation.
+   For transfer previews, prefer: From, To, Amount, Rail, Memo or description, and Approval mode when applicable.
 7. Execute only with the preview-matched `confirmation_token`.
 
 ### Approvals

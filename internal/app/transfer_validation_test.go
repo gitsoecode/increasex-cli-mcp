@@ -115,7 +115,7 @@ func TestTransferWriteValidationRejectsInvalidInputBeforePreviewAndExecute(t *te
 					Rail: "rtp",
 				})
 			},
-			fieldNames: []string{"rail", "transfer_id"},
+			fieldNames: []string{"transfer_id"},
 		},
 		{
 			name: "cancel action",

@@ -187,7 +187,7 @@ func TestHandleWritePreviewsWhenConfirmationTokenIsMissing(t *testing.T) {
 		t.Context(),
 		app.Session{},
 		nil,
-		false,
+		boolPtr(false),
 		"",
 		func() (*app.PreviewResult, error) {
 			previewCalled = true
@@ -223,7 +223,7 @@ func TestHandleWriteExecutesWithConfirmationToken(t *testing.T) {
 		t.Context(),
 		app.Session{},
 		nil,
-		false,
+		boolPtr(false),
 		"token_123",
 		func() (*app.PreviewResult, error) {
 			previewCalled = true
@@ -247,6 +247,81 @@ func TestHandleWriteExecutesWithConfirmationToken(t *testing.T) {
 	text := toJSONString(result)
 	if !strings.Contains(text, "\"mode\":\"executed\"") {
 		t.Fatalf("handleWrite() = %s, want executed payload", text)
+	}
+}
+
+func TestHandleWriteReturnsValidationErrorWhenTokenOmitsDryRun(t *testing.T) {
+	server := &Server{}
+	previewCalled := false
+	executeCalled := false
+
+	result, isErr := server.handleWrite(
+		t.Context(),
+		app.Session{},
+		nil,
+		nil,
+		"token_123",
+		func() (*app.PreviewResult, error) {
+			previewCalled = true
+			return &app.PreviewResult{Mode: "preview"}, nil
+		},
+		func() (any, string, error) {
+			executeCalled = true
+			return map[string]any{"mode": "executed"}, "req_123", nil
+		},
+	)
+
+	if !isErr {
+		t.Fatal("handleWrite() isErr = false, want true")
+	}
+	if previewCalled || executeCalled {
+		t.Fatalf("handleWrite() called preview=%v execute=%v, want neither", previewCalled, executeCalled)
+	}
+	detail := unwrapErrorDetail(t, result)
+	if detail.Code != util.CodeValidationError {
+		t.Fatalf("error code = %q, want %q", detail.Code, util.CodeValidationError)
+	}
+	if detail.Message == "" || !strings.Contains(detail.Message, "dry_run=false") {
+		t.Fatalf("error message = %q, want dry_run=false guidance", detail.Message)
+	}
+	if len(detail.Fields) != 1 || detail.Fields[0].Field != "dry_run" {
+		t.Fatalf("error fields = %#v, want dry_run field error", detail.Fields)
+	}
+}
+
+func TestHandleWriteReturnsValidationErrorWhenTokenUsesDryRunTrue(t *testing.T) {
+	server := &Server{}
+	previewCalled := false
+	executeCalled := false
+
+	result, isErr := server.handleWrite(
+		t.Context(),
+		app.Session{},
+		nil,
+		boolPtr(true),
+		"token_123",
+		func() (*app.PreviewResult, error) {
+			previewCalled = true
+			return &app.PreviewResult{Mode: "preview"}, nil
+		},
+		func() (any, string, error) {
+			executeCalled = true
+			return map[string]any{"mode": "executed"}, "req_123", nil
+		},
+	)
+
+	if !isErr {
+		t.Fatal("handleWrite() isErr = false, want true")
+	}
+	if previewCalled || executeCalled {
+		t.Fatalf("handleWrite() called preview=%v execute=%v, want neither", previewCalled, executeCalled)
+	}
+	detail := unwrapErrorDetail(t, result)
+	if detail.Code != util.CodeValidationError {
+		t.Fatalf("error code = %q, want %q", detail.Code, util.CodeValidationError)
+	}
+	if len(detail.Fields) != 1 || detail.Fields[0].Field != "dry_run" {
+		t.Fatalf("error fields = %#v, want dry_run field error", detail.Fields)
 	}
 }
 
@@ -307,19 +382,57 @@ func TestTransferCreateToolsDescribeQueueMode(t *testing.T) {
 	}
 
 	for _, name := range []string{
+		"create_account",
+		"close_account",
+		"create_account_number",
+		"disable_account_number",
 		"create_account_transfer",
 		"create_ach_transfer",
 		"create_real_time_payments_transfer",
 		"create_fednow_transfer",
 		"create_wire_transfer",
+		"approve_transfer",
+		"cancel_transfer",
+		"create_external_account",
+		"update_external_account",
+		"create_card",
+		"update_card_pin",
 	} {
 		description := descriptions[name]
-		if !strings.Contains(description, "require_approval=true") {
+		if strings.HasPrefix(name, "create_") && strings.Contains(name, "transfer") && !strings.Contains(description, "require_approval=true") {
 			t.Fatalf("%s description = %q, want require_approval guidance", name, description)
 		}
-		if !strings.Contains(description, "queue for approval") {
+		if strings.HasPrefix(name, "create_") && strings.Contains(name, "transfer") && !strings.Contains(description, "queue for approval") {
 			t.Fatalf("%s description = %q, want queue-for-approval wording", name, description)
 		}
+		if !strings.Contains(description, "dry_run=false") {
+			t.Fatalf("%s description = %q, want dry_run=false execution guidance", name, description)
+		}
+	}
+}
+
+func TestDescribeCapabilitiesIncludesWritePatternAndTransferRailAliases(t *testing.T) {
+	result := describeCapabilities()
+
+	writePattern, ok := result["write_pattern"].(map[string]any)
+	if !ok {
+		t.Fatalf("write_pattern type = %T, want map[string]any", result["write_pattern"])
+	}
+	execute, ok := writePattern["execute"].(string)
+	if !ok || !strings.Contains(execute, "dry_run=false") {
+		t.Fatalf("write_pattern.execute = %#v, want dry_run=false guidance", writePattern["execute"])
+	}
+
+	transferRails, ok := result["transfer_rails"].(map[string]any)
+	if !ok {
+		t.Fatalf("transfer_rails type = %T, want map[string]any", result["transfer_rails"])
+	}
+	aliases, ok := transferRails["aliases"].(map[string]string)
+	if !ok {
+		t.Fatalf("transfer_rails.aliases type = %T, want map[string]string", transferRails["aliases"])
+	}
+	if aliases["internal"] != "account" || aliases["rtp"] != "real_time_payments" {
+		t.Fatalf("transfer rail aliases = %#v, want internal/account and rtp/real_time_payments", aliases)
 	}
 }
 
@@ -380,6 +493,49 @@ func TestNewReadToolsExposeExpectedFilters(t *testing.T) {
 			}
 		}
 	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+func unwrapErrorDetail(t *testing.T, result any) *util.ErrorDetail {
+	t.Helper()
+	envelope, ok := result.(util.Envelope)
+	if !ok {
+		t.Fatalf("result type = %T, want util.Envelope", result)
+	}
+	if envelope.Error == nil {
+		t.Fatal("envelope.Error = nil, want populated error detail")
+	}
+	return envelope.Error
+}
+
+func TestRetrieveTransferToolSchemaSupportsEventDrivenLookup(t *testing.T) {
+	server := &Server{}
+
+	for _, tool := range server.tools() {
+		if tool.Name != "retrieve_transfer" {
+			continue
+		}
+
+		properties, ok := tool.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("retrieve_transfer properties type = %T, want map[string]any", tool.InputSchema["properties"])
+		}
+		if _, ok := properties["event_id"]; !ok {
+			t.Fatal("retrieve_transfer input schema missing event_id")
+		}
+		if _, ok := tool.InputSchema["required"]; ok {
+			t.Fatal("retrieve_transfer should not require rail and transfer_id when event-driven lookup is supported")
+		}
+		if !strings.Contains(tool.Description, "event_id") {
+			t.Fatalf("retrieve_transfer description = %q, want event-driven lookup guidance", tool.Description)
+		}
+		return
+	}
+
+	t.Fatal("retrieve_transfer tool definition not found")
 }
 
 func TestExternalTransferToolSchemasUseCorrectSourceIdentifiers(t *testing.T) {
