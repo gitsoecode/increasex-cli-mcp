@@ -25,6 +25,8 @@ Use this as the default playbook for both operator workflows and repository deve
    Use `create_account_transfer` and `create_ach_transfer` instead of compatibility aliases when possible.
 8. When an `mcp__increasex` write tool returns a preview response, restate that preview in a short human-readable format before asking for confirmation.
    Use only fields present in the MCP response plus already-known user context. Do not fabricate or synthesize a preview if the MCP did not return one. Keep masked values masked.
+9. Prefer human-readable names alongside raw identifiers when possible.
+   For accounts, cards, account numbers, external accounts, and similar objects, show the best available human label plus the id instead of only the id. Use names already present in context or obtainable with a simple lookup, but do not create lots of extra join work just to decorate every field.
 
 ## Operator Workflows
 
@@ -65,6 +67,7 @@ Use this as the default playbook for both operator workflows and repository deve
    Keep `require_approval=true` when the user wants a queued transfer instead of immediate execution.
 6. If the MCP returns a preview, restate it in a short human-readable format before asking for confirmation.
    For transfer previews, prefer: From, To, Amount, Rail, Memo or description, and Approval mode when applicable.
+   When possible, show account or counterparty names together with ids so the user can recognize the objects quickly.
 7. Execute only with the preview-matched `confirmation_token`.
 
 ### Approvals
