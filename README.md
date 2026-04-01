@@ -9,6 +9,12 @@
 
 The project is intentionally built so CLI commands and MCP tools use the same auth, validation, normalization, preview, and execution paths.
 
+## Affiliation
+
+IncreaseX is an independent, community-maintained project. It is not affiliated with, endorsed by, or sponsored by Increase Technologies, Inc., and it is not an official Increase product.
+
+This project is designed to interoperate with the Increase API and related systems. "Increase" is a trademark of its respective owner.
+
 ## Current Status
 
 This repository currently includes:
