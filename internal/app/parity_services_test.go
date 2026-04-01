@@ -409,3 +409,28 @@ func TestTransferActionValidationRejectsUnknownRailAfterNormalization(t *testing
 		t.Fatalf("preview = %#v, want nil on validation failure", preview)
 	}
 }
+
+func TestApproveTransferPreviewIncludesExecuteReviewMetadata(t *testing.T) {
+	services := NewServices()
+	session := Session{ProfileName: "default", Environment: "sandbox"}
+
+	preview, err := services.PreviewApproveTransfer(session, TransferActionInput{
+		Rail:       "internal",
+		TransferID: "account_transfer_123",
+	})
+	if err != nil {
+		t.Fatalf("PreviewApproveTransfer() error = %v", err)
+	}
+	if preview.ExecuteAction != "approve_transfer" {
+		t.Fatalf("PreviewApproveTransfer() execute_action = %q, want approve_transfer", preview.ExecuteAction)
+	}
+	if preview.ExecuteSummary != preview.Summary {
+		t.Fatalf("PreviewApproveTransfer() execute_summary = %q, want %q", preview.ExecuteSummary, preview.Summary)
+	}
+	if !preview.ExecuteRequiresConfirmation {
+		t.Fatal("PreviewApproveTransfer() execute_requires_confirmation = false, want true")
+	}
+	if got := preview.ExecuteDetails["rail"]; got != "account" {
+		t.Fatalf("PreviewApproveTransfer() execute_details.rail = %v, want account", got)
+	}
+}

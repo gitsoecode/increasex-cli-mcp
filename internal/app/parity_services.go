@@ -52,12 +52,8 @@ func (s Services) PreviewCreateExternalAccount(session Session, input CreateExte
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Create external account %q", input.Description),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Create external account %q", input.Description)
+	return newPreviewResult("create_external_account", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCreateExternalAccount(ctx context.Context, api *increasex.Client, session Session, input CreateExternalAccountInput) (any, string, error) {
@@ -97,12 +93,8 @@ func (s Services) PreviewUpdateExternalAccount(session Session, input UpdateExte
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Update external account %s", input.ExternalAccountID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Update external account %s", input.ExternalAccountID)
+	return newPreviewResult("update_external_account", summary, token, effective), nil
 }
 
 func (s Services) ExecuteUpdateExternalAccount(ctx context.Context, api *increasex.Client, session Session, input UpdateExternalAccountInput) (any, string, error) {
@@ -181,12 +173,8 @@ func (s Services) PreviewUpdateCardPIN(session Session, input UpdateCardPINInput
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Update PIN for card %s", input.CardID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Update PIN for card %s", input.CardID)
+	return newPreviewResult("update_card_pin", summary, token, effective), nil
 }
 
 func (s Services) ExecuteUpdateCardPIN(ctx context.Context, api *increasex.Client, session Session, input UpdateCardPINInput) (any, string, error) {
@@ -391,12 +379,8 @@ func (s Services) PreviewApproveTransfer(session Session, input TransferActionIn
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Approve %s transfer %s", input.Rail, input.TransferID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Approve %s transfer %s", input.Rail, input.TransferID)
+	return newPreviewResult("approve_transfer", summary, token, effective), nil
 }
 
 func (s Services) ExecuteApproveTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {
@@ -453,12 +437,8 @@ func (s Services) PreviewCancelTransfer(session Session, input TransferActionInp
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Cancel %s transfer %s", input.Rail, input.TransferID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Cancel %s transfer %s", input.Rail, input.TransferID)
+	return newPreviewResult("cancel_transfer", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCancelTransfer(ctx context.Context, api *increasex.Client, session Session, input TransferActionInput) (any, string, error) {

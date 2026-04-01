@@ -74,6 +74,7 @@ func TestConfirmationPayloadExcludesControlFields(t *testing.T) {
 		AmountCents:       100,
 		Description:       "CLI test",
 		ConfirmationToken: "token",
+		ApprovalContext:   map[string]any{"execute_summary": "Transfer"},
 	}
 	dryRun := false
 	input.DryRun = &dryRun
@@ -84,6 +85,9 @@ func TestConfirmationPayloadExcludesControlFields(t *testing.T) {
 	}
 	if _, ok := payload["dry_run"]; ok {
 		t.Fatal("confirmation_payload should exclude dry_run")
+	}
+	if _, ok := payload["approval_context"]; ok {
+		t.Fatal("confirmation_payload should exclude approval_context")
 	}
 	if payload["description"] != "CLI test" {
 		t.Fatalf("confirmation_payload description = %v, want CLI test", payload["description"])
@@ -102,8 +106,34 @@ func TestPreviewUpdateCardPINMasksSensitiveValue(t *testing.T) {
 	if got := preview.Details["pin"]; got != "****" {
 		t.Fatalf("PreviewUpdateCardPIN() pin detail = %v, want masked value", got)
 	}
+	if got := preview.ExecuteDetails["pin"]; got != "****" {
+		t.Fatalf("PreviewUpdateCardPIN() execute_details.pin = %v, want masked value", got)
+	}
 	if preview.ConfirmationToken == "" {
 		t.Fatal("PreviewUpdateCardPIN() confirmation token = empty, want token")
+	}
+}
+
+func TestPreviewCreateAccountIncludesExecuteReviewMetadata(t *testing.T) {
+	services := NewServices()
+	preview, err := services.PreviewCreateAccount(Session{ProfileName: "default", Environment: "sandbox"}, CreateAccountInput{
+		Name:     "Treasury",
+		EntityID: "entity_123",
+	})
+	if err != nil {
+		t.Fatalf("PreviewCreateAccount() error = %v", err)
+	}
+	if preview.ExecuteAction != "create_account" {
+		t.Fatalf("PreviewCreateAccount() execute_action = %q, want create_account", preview.ExecuteAction)
+	}
+	if preview.ExecuteSummary != preview.Summary {
+		t.Fatalf("PreviewCreateAccount() execute_summary = %q, want %q", preview.ExecuteSummary, preview.Summary)
+	}
+	if !preview.ExecuteRequiresConfirmation {
+		t.Fatal("PreviewCreateAccount() execute_requires_confirmation = false, want true")
+	}
+	if got := preview.ExecuteDetails["entity_id"]; got != "entity_123" {
+		t.Fatalf("PreviewCreateAccount() execute_details.entity_id = %v, want entity_123", got)
 	}
 }
 
@@ -683,6 +713,53 @@ func TestPreviewDisableAccountNumberSummary(t *testing.T) {
 	}
 	if preview.ConfirmationToken == "" {
 		t.Fatal("PreviewDisableAccountNumber() confirmation token = empty, want token")
+	}
+}
+
+func TestPreviewCreateExternalAccountMasksSensitiveExecuteReviewFields(t *testing.T) {
+	services := NewServices()
+	preview, err := services.PreviewCreateExternalAccount(Session{ProfileName: "default", Environment: "sandbox"}, CreateExternalAccountInput{
+		Description:   "Vendor account",
+		RoutingNumber: "021000021",
+		AccountNumber: "123456789",
+		AccountHolder: "individual",
+	})
+	if err != nil {
+		t.Fatalf("PreviewCreateExternalAccount() error = %v", err)
+	}
+	if got := preview.ExecuteDetails["account_number"]; got != "****6789" {
+		t.Fatalf("PreviewCreateExternalAccount() execute_details.account_number = %v, want masked value", got)
+	}
+	if got := preview.ExecuteDetails["routing_number"]; got != "021000021" {
+		t.Fatalf("PreviewCreateExternalAccount() execute_details.routing_number = %v, want routing number preserved", got)
+	}
+}
+
+func TestConfirmationVerificationIgnoresApprovalContext(t *testing.T) {
+	services := NewServices()
+	session := Session{ProfileName: "default", Environment: "sandbox"}
+	preview, err := services.PreviewInternalTransfer(session, MoveMoneyInternalInput{
+		FromAccountID: "account_a",
+		ToAccountID:   "account_b",
+		AmountCents:   100,
+		Description:   "CLI test",
+	})
+	if err != nil {
+		t.Fatalf("PreviewInternalTransfer() error = %v", err)
+	}
+
+	err = services.confirm.Verify(preview.ConfirmationToken, "move_money_internal", session, effectiveConfirmationPayload(MoveMoneyInternalInput{
+		FromAccountID: "account_a",
+		ToAccountID:   "account_b",
+		AmountCents:   100,
+		Description:   "CLI test",
+		ApprovalContext: map[string]any{
+			"execute_action":  "move_money_internal",
+			"execute_summary": preview.Summary,
+		},
+	}))
+	if err != nil {
+		t.Fatalf("Verify() error = %v, want approval_context to be ignored", err)
 	}
 }
 

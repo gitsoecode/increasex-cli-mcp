@@ -15,6 +15,7 @@ Use this as the default playbook for both operator workflows and repository deve
    Call every write tool without `dry_run`, or with `dry_run=true`, first. Only call the same tool with `dry_run=false` after you have a matching `confirmation_token`.
 3. Reuse the same effective payload between preview and execution.
    If anything substantive changes, generate a fresh preview.
+   When the preview returns execute-review metadata, pass it back as `approval_context` on the execute call so any MCP-capable host can show the already-reviewed action clearly during its execute approval step.
 4. Prefer explicit `idempotency_key` values on writes.
    Suggest one unless the user is intentionally replaying a prior preview or the workflow already provides a stable key.
 5. Keep sensitive values masked by default.
@@ -25,6 +26,8 @@ Use this as the default playbook for both operator workflows and repository deve
    Use `create_account_transfer` and `create_ach_transfer` instead of compatibility aliases when possible.
 8. When an `mcp__increasex` write tool returns a preview response, restate that preview in a short human-readable format before asking for confirmation.
    Use only fields present in the MCP response plus already-known user context. Do not fabricate or synthesize a preview if the MCP did not return one. Keep masked values masked.
+   When you move to execution, frame it explicitly as executing the already-reviewed action, not as a brand-new approval.
+   Apply this pattern regardless of the specific host or agent runtime. The skill should help Codex, Claude, and other MCP-capable agents present the same two-step write flow clearly.
 9. Prefer human-readable names alongside raw identifiers when possible.
    For accounts, cards, account numbers, external accounts, and similar objects, show the best available human label plus the id instead of only the id. Use names already present in context or obtainable with a simple lookup, but do not create lots of extra join work just to decorate every field.
 
@@ -69,6 +72,7 @@ Use this as the default playbook for both operator workflows and repository deve
    For transfer previews, prefer: From, To, Amount, Rail, Memo or description, and Approval mode when applicable.
    When possible, show account or counterparty names together with ids so the user can recognize the objects quickly.
 7. Execute only with the preview-matched `confirmation_token`.
+   Reuse the preview's execute-review metadata as `approval_context` on the execute call when it is available so the execute step stays readable in any host's approval UI.
 
 ### Approvals
 

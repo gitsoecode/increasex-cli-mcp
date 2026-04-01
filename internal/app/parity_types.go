@@ -12,25 +12,27 @@ type ExternalAccountSummary struct {
 }
 
 type CreateExternalAccountInput struct {
-	AccountNumber     string `json:"account_number"`
-	Description       string `json:"description"`
-	RoutingNumber     string `json:"routing_number"`
-	AccountHolder     string `json:"account_holder,omitempty"`
-	Funding           string `json:"funding,omitempty"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	AccountNumber     string         `json:"account_number"`
+	Description       string         `json:"description"`
+	RoutingNumber     string         `json:"routing_number"`
+	AccountHolder     string         `json:"account_holder,omitempty"`
+	Funding           string         `json:"funding,omitempty"`
+	IdempotencyKey    string         `json:"idempotency_key,omitempty"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type UpdateExternalAccountInput struct {
-	ExternalAccountID string `json:"external_account_id"`
-	AccountHolder     string `json:"account_holder,omitempty"`
-	Description       string `json:"description,omitempty"`
-	Funding           string `json:"funding,omitempty"`
-	Status            string `json:"status,omitempty"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	ExternalAccountID string         `json:"external_account_id"`
+	AccountHolder     string         `json:"account_holder,omitempty"`
+	Description       string         `json:"description,omitempty"`
+	Funding           string         `json:"funding,omitempty"`
+	Status            string         `json:"status,omitempty"`
+	IdempotencyKey    string         `json:"idempotency_key,omitempty"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type CardDetailsInput struct {
@@ -51,10 +53,11 @@ type CardDetailsIframeResult struct {
 }
 
 type UpdateCardPINInput struct {
-	CardID            string `json:"card_id"`
-	PIN               string `json:"pin"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	CardID            string         `json:"card_id"`
+	PIN               string         `json:"pin"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type TransferSummary struct {
@@ -110,8 +113,9 @@ type RetrieveTransferInput struct {
 }
 
 type TransferActionInput struct {
-	Rail              string `json:"rail"`
-	TransferID        string `json:"transfer_id"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	Rail              string         `json:"rail"`
+	TransferID        string         `json:"transfer_id"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }

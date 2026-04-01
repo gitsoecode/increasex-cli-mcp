@@ -164,10 +164,14 @@ type CardBillingDetails struct {
 }
 
 type PreviewResult struct {
-	Mode              string         `json:"mode"`
-	Summary           string         `json:"summary"`
-	ConfirmationToken string         `json:"confirmation_token"`
-	Details           map[string]any `json:"details,omitempty"`
+	Mode                        string         `json:"mode"`
+	Summary                     string         `json:"summary"`
+	ConfirmationToken           string         `json:"confirmation_token"`
+	Details                     map[string]any `json:"details,omitempty"`
+	ExecuteSummary              string         `json:"execute_summary,omitempty"`
+	ExecuteDetails              map[string]any `json:"execute_details,omitempty"`
+	ExecuteAction               string         `json:"execute_action,omitempty"`
+	ExecuteRequiresConfirmation bool           `json:"execute_requires_confirmation,omitempty"`
 }
 
 type ExecutedResult struct {
@@ -176,20 +180,22 @@ type ExecutedResult struct {
 }
 
 type CreateAccountInput struct {
-	Name                  string `json:"name"`
-	EntityID              string `json:"entity_id,omitempty"`
-	InformationalEntityID string `json:"informational_entity_id,omitempty"`
-	ProgramID             string `json:"program_id,omitempty"`
-	IdempotencyKey        string `json:"idempotency_key,omitempty"`
-	DryRun                *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken     string `json:"confirmation_token,omitempty"`
+	Name                  string         `json:"name"`
+	EntityID              string         `json:"entity_id,omitempty"`
+	InformationalEntityID string         `json:"informational_entity_id,omitempty"`
+	ProgramID             string         `json:"program_id,omitempty"`
+	IdempotencyKey        string         `json:"idempotency_key,omitempty"`
+	DryRun                *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken     string         `json:"confirmation_token,omitempty"`
+	ApprovalContext       map[string]any `json:"approval_context,omitempty"`
 }
 
 type CloseAccountInput struct {
-	AccountID         string `json:"account_id"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	AccountID         string         `json:"account_id"`
+	IdempotencyKey    string         `json:"idempotency_key,omitempty"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type CreateAccountNumberInput struct {
@@ -200,6 +206,7 @@ type CreateAccountNumberInput struct {
 	IdempotencyKey    string              `json:"idempotency_key,omitempty"`
 	DryRun            *bool               `json:"dry_run,omitempty"`
 	ConfirmationToken string              `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any      `json:"approval_context,omitempty"`
 }
 
 type InboundACHInput struct {
@@ -211,21 +218,23 @@ type InboundChecksInput struct {
 }
 
 type DisableAccountNumberInput struct {
-	AccountNumberID   string `json:"account_number_id"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	AccountNumberID   string         `json:"account_number_id"`
+	IdempotencyKey    string         `json:"idempotency_key,omitempty"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type MoveMoneyInternalInput struct {
-	FromAccountID     string `json:"from_account_id"`
-	ToAccountID       string `json:"to_account_id"`
-	AmountCents       int64  `json:"amount_cents"`
-	Description       string `json:"description,omitempty"`
-	RequireApproval   *bool  `json:"require_approval,omitempty"`
-	IdempotencyKey    string `json:"idempotency_key,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken string `json:"confirmation_token,omitempty"`
+	FromAccountID     string         `json:"from_account_id"`
+	ToAccountID       string         `json:"to_account_id"`
+	AmountCents       int64          `json:"amount_cents"`
+	Description       string         `json:"description,omitempty"`
+	RequireApproval   *bool          `json:"require_approval,omitempty"`
+	IdempotencyKey    string         `json:"idempotency_key,omitempty"`
+	DryRun            *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken string         `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any `json:"approval_context,omitempty"`
 }
 
 type BillingAddressInput struct {
@@ -252,44 +261,47 @@ type CreateCardInput struct {
 	IdempotencyKey    string               `json:"idempotency_key,omitempty"`
 	DryRun            *bool                `json:"dry_run,omitempty"`
 	ConfirmationToken string               `json:"confirmation_token,omitempty"`
+	ApprovalContext   map[string]any       `json:"approval_context,omitempty"`
 }
 
 type ACHTransferInput struct {
-	AccountID                string `json:"account_id"`
-	AmountCents              int64  `json:"amount_cents"`
-	StatementDescriptor      string `json:"statement_descriptor"`
-	AccountNumber            string `json:"account_number,omitempty"`
-	RoutingNumber            string `json:"routing_number,omitempty"`
-	ExternalAccountID        string `json:"external_account_id,omitempty"`
-	Funding                  string `json:"funding,omitempty"`
-	DestinationAccountHolder string `json:"destination_account_holder,omitempty"`
-	IndividualID             string `json:"individual_id,omitempty"`
-	IndividualName           string `json:"individual_name,omitempty"`
-	CompanyName              string `json:"company_name,omitempty"`
-	CompanyEntryDescription  string `json:"company_entry_description,omitempty"`
-	CompanyDescriptiveDate   string `json:"company_descriptive_date,omitempty"`
-	CompanyDiscretionaryData string `json:"company_discretionary_data,omitempty"`
-	RequireApproval          *bool  `json:"require_approval,omitempty"`
-	IdempotencyKey           string `json:"idempotency_key,omitempty"`
-	DryRun                   *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken        string `json:"confirmation_token,omitempty"`
+	AccountID                string         `json:"account_id"`
+	AmountCents              int64          `json:"amount_cents"`
+	StatementDescriptor      string         `json:"statement_descriptor"`
+	AccountNumber            string         `json:"account_number,omitempty"`
+	RoutingNumber            string         `json:"routing_number,omitempty"`
+	ExternalAccountID        string         `json:"external_account_id,omitempty"`
+	Funding                  string         `json:"funding,omitempty"`
+	DestinationAccountHolder string         `json:"destination_account_holder,omitempty"`
+	IndividualID             string         `json:"individual_id,omitempty"`
+	IndividualName           string         `json:"individual_name,omitempty"`
+	CompanyName              string         `json:"company_name,omitempty"`
+	CompanyEntryDescription  string         `json:"company_entry_description,omitempty"`
+	CompanyDescriptiveDate   string         `json:"company_descriptive_date,omitempty"`
+	CompanyDiscretionaryData string         `json:"company_discretionary_data,omitempty"`
+	RequireApproval          *bool          `json:"require_approval,omitempty"`
+	IdempotencyKey           string         `json:"idempotency_key,omitempty"`
+	DryRun                   *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken        string         `json:"confirmation_token,omitempty"`
+	ApprovalContext          map[string]any `json:"approval_context,omitempty"`
 }
 
 type RTPTransferInput struct {
-	AmountCents              int64  `json:"amount_cents"`
-	CreditorName             string `json:"creditor_name"`
-	RemittanceInformation    string `json:"remittance_information"`
-	SourceAccountNumberID    string `json:"source_account_number_id"`
-	DebtorName               string `json:"debtor_name,omitempty"`
-	DestinationAccountNumber string `json:"destination_account_number,omitempty"`
-	DestinationRoutingNumber string `json:"destination_routing_number,omitempty"`
-	ExternalAccountID        string `json:"external_account_id,omitempty"`
-	UltimateCreditorName     string `json:"ultimate_creditor_name,omitempty"`
-	UltimateDebtorName       string `json:"ultimate_debtor_name,omitempty"`
-	RequireApproval          *bool  `json:"require_approval,omitempty"`
-	IdempotencyKey           string `json:"idempotency_key,omitempty"`
-	DryRun                   *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken        string `json:"confirmation_token,omitempty"`
+	AmountCents              int64          `json:"amount_cents"`
+	CreditorName             string         `json:"creditor_name"`
+	RemittanceInformation    string         `json:"remittance_information"`
+	SourceAccountNumberID    string         `json:"source_account_number_id"`
+	DebtorName               string         `json:"debtor_name,omitempty"`
+	DestinationAccountNumber string         `json:"destination_account_number,omitempty"`
+	DestinationRoutingNumber string         `json:"destination_routing_number,omitempty"`
+	ExternalAccountID        string         `json:"external_account_id,omitempty"`
+	UltimateCreditorName     string         `json:"ultimate_creditor_name,omitempty"`
+	UltimateDebtorName       string         `json:"ultimate_debtor_name,omitempty"`
+	RequireApproval          *bool          `json:"require_approval,omitempty"`
+	IdempotencyKey           string         `json:"idempotency_key,omitempty"`
+	DryRun                   *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken        string         `json:"confirmation_token,omitempty"`
+	ApprovalContext          map[string]any `json:"approval_context,omitempty"`
 }
 
 type FedNowAddressInput struct {
@@ -316,28 +328,30 @@ type FedNowTransferInput struct {
 	IdempotencyKey                    string              `json:"idempotency_key,omitempty"`
 	DryRun                            *bool               `json:"dry_run,omitempty"`
 	ConfirmationToken                 string              `json:"confirmation_token,omitempty"`
+	ApprovalContext                   map[string]any      `json:"approval_context,omitempty"`
 }
 
 type WireTransferInput struct {
-	AccountID               string `json:"account_id"`
-	AmountCents             int64  `json:"amount_cents"`
-	BeneficiaryName         string `json:"beneficiary_name"`
-	MessageToRecipient      string `json:"message_to_recipient"`
-	SourceAccountNumberID   string `json:"source_account_number_id,omitempty"`
-	AccountNumber           string `json:"account_number,omitempty"`
-	RoutingNumber           string `json:"routing_number,omitempty"`
-	ExternalAccountID       string `json:"external_account_id,omitempty"`
-	BeneficiaryAddressLine1 string `json:"beneficiary_address_line1,omitempty"`
-	BeneficiaryAddressLine2 string `json:"beneficiary_address_line2,omitempty"`
-	BeneficiaryAddressLine3 string `json:"beneficiary_address_line3,omitempty"`
-	OriginatorName          string `json:"originator_name,omitempty"`
-	OriginatorAddressLine1  string `json:"originator_address_line1,omitempty"`
-	OriginatorAddressLine2  string `json:"originator_address_line2,omitempty"`
-	OriginatorAddressLine3  string `json:"originator_address_line3,omitempty"`
-	RequireApproval         *bool  `json:"require_approval,omitempty"`
-	IdempotencyKey          string `json:"idempotency_key,omitempty"`
-	DryRun                  *bool  `json:"dry_run,omitempty"`
-	ConfirmationToken       string `json:"confirmation_token,omitempty"`
+	AccountID               string         `json:"account_id"`
+	AmountCents             int64          `json:"amount_cents"`
+	BeneficiaryName         string         `json:"beneficiary_name"`
+	MessageToRecipient      string         `json:"message_to_recipient"`
+	SourceAccountNumberID   string         `json:"source_account_number_id,omitempty"`
+	AccountNumber           string         `json:"account_number,omitempty"`
+	RoutingNumber           string         `json:"routing_number,omitempty"`
+	ExternalAccountID       string         `json:"external_account_id,omitempty"`
+	BeneficiaryAddressLine1 string         `json:"beneficiary_address_line1,omitempty"`
+	BeneficiaryAddressLine2 string         `json:"beneficiary_address_line2,omitempty"`
+	BeneficiaryAddressLine3 string         `json:"beneficiary_address_line3,omitempty"`
+	OriginatorName          string         `json:"originator_name,omitempty"`
+	OriginatorAddressLine1  string         `json:"originator_address_line1,omitempty"`
+	OriginatorAddressLine2  string         `json:"originator_address_line2,omitempty"`
+	OriginatorAddressLine3  string         `json:"originator_address_line3,omitempty"`
+	RequireApproval         *bool          `json:"require_approval,omitempty"`
+	IdempotencyKey          string         `json:"idempotency_key,omitempty"`
+	DryRun                  *bool          `json:"dry_run,omitempty"`
+	ConfirmationToken       string         `json:"confirmation_token,omitempty"`
+	ApprovalContext         map[string]any `json:"approval_context,omitempty"`
 }
 
 func IsDryRun(value *bool) bool {

@@ -424,10 +424,11 @@ All write commands and MCP tools use a preview-first flow:
 
 - default CLI behavior: preview, confirm, then execute
 - `--dry-run` forces preview-only mode
-- preview returns a summary and `confirmation_token`
+- preview returns a summary, `confirmation_token`, and execute-review metadata
 - MCP omitted `dry_run` stays preview-first
 - MCP `dry_run=true` previews
 - MCP `dry_run=false` only executes when you also provide a valid `confirmation_token`
+- MCP execute calls may also include `approval_context` copied from the preview so the host permission prompt shows the already-reviewed action clearly
 - if you do not pass a token manually in the CLI, the CLI previews first and then prompts you before execution
 
 ### Create an Account
@@ -797,8 +798,8 @@ curl -L https://raw.githubusercontent.com/gitsoecode/increasex-cli-mcp/main/skil
 All MCP writes are preview-first:
 
 1. Call the tool without `dry_run`, or with `dry_run=true`
-2. Receive preview details and a `confirmation_token`
-3. Call the same tool again with `dry_run=false` and the same effective payload
+2. Receive preview details, a `confirmation_token`, and execute-review metadata
+3. Call the same tool again with `dry_run=false`, the same effective payload, and optional `approval_context` copied from the preview
 
 Example internal transfer queue flow:
 
@@ -826,6 +827,18 @@ Then execute the queued write with the returned token:
     "amount_cents": 500,
     "description": "fund MCP account",
     "require_approval": true,
+    "approval_context": {
+      "execute_action": "move_money_internal",
+      "execute_summary": "Queue account transfer $5.00 for approval",
+      "execute_details": {
+        "from_account_id": "account_source",
+        "to_account_id": "account_destination",
+        "amount_cents": 500,
+        "description": "fund MCP account",
+        "require_approval": true
+      },
+      "execute_requires_confirmation": true
+    },
     "confirmation_token": "TOKEN_FROM_PREVIEW",
     "dry_run": false
   }

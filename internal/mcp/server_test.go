@@ -408,6 +408,9 @@ func TestTransferCreateToolsDescribeQueueMode(t *testing.T) {
 		if !strings.Contains(description, "dry_run=false") {
 			t.Fatalf("%s description = %q, want dry_run=false execution guidance", name, description)
 		}
+		if !strings.Contains(description, "approval_context") {
+			t.Fatalf("%s description = %q, want approval_context guidance", name, description)
+		}
 	}
 }
 
@@ -419,8 +422,8 @@ func TestDescribeCapabilitiesIncludesWritePatternAndTransferRailAliases(t *testi
 		t.Fatalf("write_pattern type = %T, want map[string]any", result["write_pattern"])
 	}
 	execute, ok := writePattern["execute"].(string)
-	if !ok || !strings.Contains(execute, "dry_run=false") {
-		t.Fatalf("write_pattern.execute = %#v, want dry_run=false guidance", writePattern["execute"])
+	if !ok || !strings.Contains(execute, "dry_run=false") || !strings.Contains(execute, "approval_context") {
+		t.Fatalf("write_pattern.execute = %#v, want dry_run=false and approval_context guidance", writePattern["execute"])
 	}
 
 	transferRails, ok := result["transfer_rails"].(map[string]any)
@@ -433,6 +436,22 @@ func TestDescribeCapabilitiesIncludesWritePatternAndTransferRailAliases(t *testi
 	}
 	if aliases["internal"] != "account" || aliases["rtp"] != "real_time_payments" {
 		t.Fatalf("transfer rail aliases = %#v, want internal/account and rtp/real_time_payments", aliases)
+	}
+}
+
+func TestWriteToolsExposeApprovalContextSchema(t *testing.T) {
+	server := &Server{}
+	for _, tool := range server.tools() {
+		switch tool.Name {
+		case "create_account", "close_account", "create_account_number", "disable_account_number", "create_card", "update_card_pin", "create_external_account", "update_external_account", "approve_transfer", "cancel_transfer", "create_account_transfer", "create_ach_transfer", "create_real_time_payments_transfer", "create_fednow_transfer", "create_wire_transfer", "move_money_internal", "move_money_external_ach", "move_money_external_rtp", "move_money_external_fednow", "move_money_external_wire":
+			properties, ok := tool.InputSchema["properties"].(map[string]any)
+			if !ok {
+				t.Fatalf("%s properties type = %T, want map[string]any", tool.Name, tool.InputSchema["properties"])
+			}
+			if _, ok := properties["approval_context"]; !ok {
+				t.Fatalf("%s schema missing approval_context", tool.Name)
+			}
+		}
 	}
 }
 

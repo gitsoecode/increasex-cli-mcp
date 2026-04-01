@@ -664,7 +664,80 @@ func effectiveConfirmationPayload(input any) map[string]any {
 	effective := CloneMap(input)
 	delete(effective, "dry_run")
 	delete(effective, "confirmation_token")
+	delete(effective, "approval_context")
 	return effective
+}
+
+func newPreviewResult(action, summary, token string, details map[string]any) *PreviewResult {
+	return &PreviewResult{
+		Mode:                        "preview",
+		Summary:                     summary,
+		ConfirmationToken:           token,
+		Details:                     details,
+		ExecuteSummary:              summary,
+		ExecuteDetails:              sanitizeApprovalContextValue("", details).(map[string]any),
+		ExecuteAction:               action,
+		ExecuteRequiresConfirmation: true,
+	}
+}
+
+func sanitizeApprovalContextValue(key string, value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := map[string]any{}
+		for childKey, childValue := range typed {
+			if childKey == "dry_run" || childKey == "confirmation_token" || childKey == "approval_context" || childKey == "idempotency_key" {
+				continue
+			}
+			sanitized := sanitizeApprovalContextValue(childKey, childValue)
+			if isApprovalContextEmpty(sanitized) {
+				continue
+			}
+			out[childKey] = sanitized
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			sanitized := sanitizeApprovalContextValue("", item)
+			if isApprovalContextEmpty(sanitized) {
+				continue
+			}
+			out = append(out, sanitized)
+		}
+		return out
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return nil
+		}
+		switch key {
+		case "account_number", "destination_account_number":
+			return util.MaskAccountNumber(typed)
+		case "pin":
+			return "****"
+		case "line1", "line2", "beneficiary_address_line1", "beneficiary_address_line2", "beneficiary_address_line3", "originator_address_line1", "originator_address_line2", "originator_address_line3":
+			return maskLine(typed)
+		default:
+			return typed
+		}
+	default:
+		return value
+	}
+}
+
+func isApprovalContextEmpty(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		return strings.TrimSpace(typed) == ""
+	case map[string]any:
+		return len(typed) == 0
+	case []any:
+		return len(typed) == 0
+	default:
+		return false
+	}
 }
 
 func (s Services) PreviewCreateAccount(session Session, input CreateAccountInput) (*PreviewResult, error) {
@@ -673,12 +746,8 @@ func (s Services) PreviewCreateAccount(session Session, input CreateAccountInput
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Create account %q in %s", input.Name, session.Environment),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Create account %q in %s", input.Name, session.Environment)
+	return newPreviewResult("create_account", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCreateAccount(ctx context.Context, api *increasex.Client, session Session, input CreateAccountInput) (any, string, error) {
@@ -708,12 +777,8 @@ func (s Services) PreviewCloseAccount(session Session, input CloseAccountInput) 
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Close account %s", input.AccountID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Close account %s", input.AccountID)
+	return newPreviewResult("close_account", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCloseAccount(ctx context.Context, api *increasex.Client, session Session, input CloseAccountInput) (any, string, error) {
@@ -741,12 +806,8 @@ func (s Services) PreviewCreateAccountNumber(session Session, input CreateAccoun
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Create account number %q for %s", input.Name, input.AccountID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Create account number %q for %s", input.Name, input.AccountID)
+	return newPreviewResult("create_account_number", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCreateAccountNumber(ctx context.Context, api *increasex.Client, session Session, input CreateAccountNumberInput) (any, string, error) {
@@ -793,12 +854,8 @@ func (s Services) PreviewDisableAccountNumber(session Session, input DisableAcco
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Disable account number %s", input.AccountNumberID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Disable account number %s", input.AccountNumberID)
+	return newPreviewResult("disable_account_number", summary, token, effective), nil
 }
 
 func (s Services) ExecuteDisableAccountNumber(ctx context.Context, api *increasex.Client, session Session, input DisableAccountNumberInput) (any, string, error) {
@@ -832,12 +889,8 @@ func (s Services) PreviewInternalTransfer(session Session, input MoveMoneyIntern
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           transferPreviewSummary("account", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := transferPreviewSummary("account", input.RequireApproval, util.FormatUSDMinor(input.AmountCents))
+	return newPreviewResult("move_money_internal", summary, token, effective), nil
 }
 
 func generatedInternalDescription(input MoveMoneyInternalInput) string {
@@ -892,12 +945,8 @@ func (s Services) PreviewCreateCard(session Session, input CreateCardInput) (*Pr
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           fmt.Sprintf("Create card for account %s", input.AccountID),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := fmt.Sprintf("Create card for account %s", input.AccountID)
+	return newPreviewResult("create_card", summary, token, effective), nil
 }
 
 func (s Services) ExecuteCreateCard(ctx context.Context, api *increasex.Client, session Session, input CreateCardInput) (any, string, error) {
@@ -966,12 +1015,8 @@ func (s Services) PreviewExternalACH(session Session, input ACHTransferInput) (*
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           transferPreviewSummary("ach", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := transferPreviewSummary("ach", input.RequireApproval, util.FormatUSDMinor(input.AmountCents))
+	return newPreviewResult("move_money_external_ach", summary, token, effective), nil
 }
 
 func (s Services) ExecuteExternalACH(ctx context.Context, api *increasex.Client, session Session, input ACHTransferInput) (any, string, error) {
@@ -1046,12 +1091,8 @@ func (s Services) PreviewExternalRTP(session Session, input RTPTransferInput) (*
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           transferPreviewSummary("real_time_payments", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := transferPreviewSummary("real_time_payments", input.RequireApproval, util.FormatUSDMinor(input.AmountCents))
+	return newPreviewResult("move_money_external_rtp", summary, token, effective), nil
 }
 
 func (s Services) ExecuteExternalRTP(ctx context.Context, api *increasex.Client, session Session, input RTPTransferInput) (any, string, error) {
@@ -1112,12 +1153,8 @@ func (s Services) PreviewExternalFedNow(session Session, input FedNowTransferInp
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           transferPreviewSummary("fednow", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := transferPreviewSummary("fednow", input.RequireApproval, util.FormatUSDMinor(input.AmountCents))
+	return newPreviewResult("move_money_external_fednow", summary, token, effective), nil
 }
 
 func (s Services) ExecuteExternalFedNow(ctx context.Context, api *increasex.Client, session Session, input FedNowTransferInput) (any, string, error) {
@@ -1186,12 +1223,8 @@ func (s Services) PreviewExternalWire(session Session, input WireTransferInput) 
 	if err != nil {
 		return nil, err
 	}
-	return &PreviewResult{
-		Mode:              "preview",
-		Summary:           transferPreviewSummary("wire", input.RequireApproval, util.FormatUSDMinor(input.AmountCents)),
-		ConfirmationToken: token,
-		Details:           effective,
-	}, nil
+	summary := transferPreviewSummary("wire", input.RequireApproval, util.FormatUSDMinor(input.AmountCents))
+	return newPreviewResult("move_money_external_wire", summary, token, effective), nil
 }
 
 func (s Services) ExecuteExternalWire(ctx context.Context, api *increasex.Client, session Session, input WireTransferInput) (any, string, error) {
